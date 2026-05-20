@@ -1,0 +1,14 @@
+RewriteEngine On
+RewriteBase /
+
+# Serve pretty URLs for static pages
+RewriteRule ^home/?$ home.html [L]
+RewriteRule ^admin/?$ admin.html [L]
+
+# Redirect root to index normally
+RewriteRule ^$ index.html [L]
+
+# Fallback unresolved static requests to 404
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule .* /404.html [L]
