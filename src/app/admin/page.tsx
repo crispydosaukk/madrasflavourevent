@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING,  } from '@/app/data/menuData';
+import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, query, orderBy, doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -397,6 +397,7 @@ export default function AdminPage() {
   const [editableVenueCharges, setEditableVenueCharges] = useState(VENUE_HALL_CHARGES.map(v => ({ ...v })));
   const [editableTableService, setEditableTableService] = useState(TABLE_SERVICE.map(t => ({ ...t })));
   const [editableKidsPricing, setEditableKidsPricing] = useState(KIDS_PRICING.map(k => ({ ...k })));
+  const [editableDryHirePrices, setEditableDryHirePrices] = useState(DRY_HIRE_PRICES.map(p => ({ ...p })));
 
   // New item inputs
   const [newMenuItemInput, setNewMenuItemInput] = useState('');
@@ -432,6 +433,7 @@ export default function AdminPage() {
         if (data.VENUE_HALL_CHARGES) setEditableVenueCharges(data.VENUE_HALL_CHARGES);
         if (data.TABLE_SERVICE) setEditableTableService(data.TABLE_SERVICE);
         if (data.KIDS_PRICING) setEditableKidsPricing(data.KIDS_PRICING);
+        if (data.DRY_HIRE_PRICES) setEditableDryHirePrices(data.DRY_HIRE_PRICES);
       }
     });
     return () => unsub();
@@ -475,6 +477,7 @@ export default function AdminPage() {
         VENUE_HALL_CHARGES: editableVenueCharges,
         TABLE_SERVICE: editableTableService,
         KIDS_PRICING: editableKidsPricing,
+        DRY_HIRE_PRICES: editableDryHirePrices,
       }, { merge: true });
       setCustomAlert({ message: 'Menus successfully updated on the website!', type: 'success' });
     } catch (error) {
@@ -1792,6 +1795,23 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           <input type="text" value={row.day} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
                           <input type="text" value={row.charge} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, charge: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
                           <input type="text" value={row.note} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, note: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-500" placeholder="Note" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dry Hire Prices */}
+                  <div className="bg-white rounded-xl border border-gray-200 p-5">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Icon name="BuildingOfficeIcon" size={16} style={{ color: '#C8860A' }} />
+                      Dry Hire Prices
+                    </h3>
+                    <div className="space-y-2">
+                      {editableDryHirePrices.map((row, i) => (
+                        <div key={i} className="flex items-center gap-3 flex-wrap">
+                          <input type="text" value={row.day} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Day" />
+                          <input type="text" value={row.session} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, session: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Session" />
+                          <input type="number" value={row.price} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, price: Number(e.target.value) } : r))} className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} placeholder="Price (£)" />
                         </div>
                       ))}
                     </div>
