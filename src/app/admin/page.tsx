@@ -5,17 +5,24 @@ import Icon from '@/components/ui/AppIcon';
 import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, query, orderBy, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import AccessControl from '@/components/admin/AccessControl';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
 type BookingStatus =
-  | 'new_enquiry' |'menu_sent' |'menu_selected' |'deposit_pending' |'deposit_confirmed' |'event_scheduled' |'event_completed' |'final_invoice_sent' |'final_payment_received' |'completed';
+  | 'new_enquiry' | 'menu_sent' | 'menu_selected' | 'deposit_pending' | 'deposit_confirmed' | 'event_scheduled' | 'event_completed' | 'final_invoice_sent' | 'final_payment_received' | 'completed';
 
 interface ExtraCharge {
   label: string;
   amount: number;
+}
+
+interface Discount {
+  type: 'fixed' | 'percentage';
+  value: number;
+  reason: string;
 }
 
 interface Booking {
@@ -38,6 +45,7 @@ interface Booking {
   extraCharges: ExtraCharge[];
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
+  discount?: Discount;
   enquiryDate: string;
   updatedAt?: string;
   createdAt?: string;
@@ -221,7 +229,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings';
+type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -275,13 +283,57 @@ export default function AdminPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  const [userPermissions, setUserPermissions] = useState<string[] | 'all'>('all');
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        try {
+          // Query by uid field (not document ID, since we use addDoc)
+          const usersQuery = query(collection(db, 'users'), where('uid', '==', user.uid));
+          const usersSnap = await getDocs(usersQuery);
+
+          if (!usersSnap.empty) {
+            // Found a managed user document
+            const userData = usersSnap.docs[0].data();
+            setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '' });
+            if (userData.roleId) {
+              const roleDoc = await getDoc(doc(db, 'roles', userData.roleId));
+              if (roleDoc.exists()) {
+                const rolePermIds: string[] = roleDoc.data().permissionIds || [];
+                // Resolve permission IDs → title strings for sidebar filtering
+                const permTitles: string[] = [];
+                for (const permId of rolePermIds) {
+                  const permDoc = await getDoc(doc(db, 'permissions', permId));
+                  if (permDoc.exists()) {
+                    permTitles.push(permDoc.data().title);
+                  }
+                }
+                setUserPermissions(permTitles);
+              } else {
+                setUserPermissions([]); // Role doc missing
+              }
+            } else {
+              setUserPermissions([]); // No role assigned
+            }
+          } else {
+            // No user doc found → original super admin (honeymoonadmin)
+            setCurrentUser({ name: 'Admin', email: user.email || '' });
+            setUserPermissions('all');
+          }
+        } catch (e) {
+          console.error("Error fetching permissions:", e);
+          setCurrentUser({ name: 'Admin', email: user.email || '' });
+          setUserPermissions([]);
+        }
         setLoggedIn(true);
       } else {
         setLoggedIn(false);
+        setCurrentUser(null);
+        setUserPermissions([]);
       }
       setLoadingAuth(false);
     });
@@ -294,6 +346,11 @@ export default function AdminPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [extraLabel, setExtraLabel] = useState('');
   const [extraAmount, setExtraAmount] = useState('');
+
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [discountError, setDiscountError] = useState('');
   const [showMenuPanel, setShowMenuPanel] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [customAlert, setCustomAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -523,7 +580,12 @@ export default function AdminPage() {
     const total = getTotalAmount(booking).toLocaleString();
     const deposit = booking.deposit.toLocaleString();
     const balance = (getTotalAmount(booking) - booking.deposit).toLocaleString();
-    
+
+    let discountText = '';
+    if (booking.discount) {
+      discountText = `\n• Discount (${booking.discount.reason}): -£${getDiscountAmount(booking).toLocaleString()}`;
+    }
+
     return `Hi ${booking.name.split(' ')[0]},
 
 Thank you so much for booking with Honeymoon Events! 🎊 Your event was a success and your booking is now fully completed.
@@ -534,6 +596,7 @@ Thank you so much for booking with Honeymoon Events! 🎊 Your event was a succe
 • Guests: ${booking.guests}
 
 *💰 Final Invoice Details:*
+• Base & Extras: £${(booking.baseAmount + (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0)).toLocaleString()}${discountText}
 • Total Amount: £${total}
 • Deposit Paid: £${deposit}
 • Final Balance Paid: £${balance}
@@ -548,7 +611,12 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       extrasText = '\n\n*➕ Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
     }
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}\n\n*✅ Deposit Paid:* -£${booking.deposit.toLocaleString()}\n\n*⚖️ Balance Due: £${(getTotalAmount(booking) - booking.deposit).toLocaleString()}*\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    let discountText = '';
+    if (booking.discount) {
+      discountText = `\n\n*🏷️ Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
+    }
+
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n*✅ Deposit Paid:* -£${booking.deposit.toLocaleString()}\n\n*⚖️ Balance Due: £${(getTotalAmount(booking) - booking.deposit).toLocaleString()}*\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -671,7 +739,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
-      
+
       const base64String = canvas.toDataURL('image/jpeg', 0.7);
 
       setBookings(prev => prev.map(b => b.id === id ? { ...b, paymentProofDeposit: base64String } : b));
@@ -685,12 +753,12 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
           paymentProofDeposit: base64String,
           updatedAt: new Date().toISOString()
         };
-        
+
         // Remove undefined values which Firestore rejects
         const cleanBookingData = Object.fromEntries(
           Object.entries(bookingData).filter(([_, v]) => v !== undefined)
         );
-        
+
         await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
       }
       setCustomAlert({ message: 'Payment proof uploaded successfully!', type: 'success' });
@@ -741,7 +809,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
-      
+
       const base64String = canvas.toDataURL('image/jpeg', 0.7);
 
       setBookings(prev => prev.map(b => b.id === id ? { ...b, paymentProofFinal: base64String } : b));
@@ -755,11 +823,11 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
           paymentProofFinal: base64String,
           updatedAt: new Date().toISOString()
         };
-        
+
         const cleanBookingData = Object.fromEntries(
           Object.entries(bookingData).filter(([_, v]) => v !== undefined)
         );
-        
+
         await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
       }
       setCustomAlert({ message: 'Final payment proof uploaded successfully!', type: 'success' });
@@ -819,6 +887,76 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
     } catch (error) {
       console.error('Error adding extra charge to database:', error);
+    }
+  };
+
+  const applyDiscount = async (id: string) => {
+    if (!discountValue || !discountReason) return;
+    const currentBooking = bookings.find(b => b.id === id);
+    if (!currentBooking) return;
+
+    const discount: Discount = {
+      type: discountType,
+      value: parseFloat(discountValue),
+      reason: discountReason
+    };
+
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, discount } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, discount } : prev);
+
+    try {
+      await setDoc(doc(db, 'booking_requests', id), { discount }, { merge: true });
+      const bookingData = {
+        ...currentBooking,
+        discount,
+        updatedAt: new Date().toISOString()
+      };
+      const cleanBookingData = Object.fromEntries(
+        Object.entries(bookingData).filter(([_, v]) => v !== undefined)
+      );
+      await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
+    } catch (error) {
+      console.error('Error applying discount:', error);
+    }
+
+    setDiscountValue('');
+    setDiscountReason('');
+  };
+
+  const removeDiscount = async (id: string) => {
+    const currentBooking = bookings.find(b => b.id === id);
+    if (!currentBooking) return;
+
+    setBookings(prev => prev.map(b => {
+      if (b.id === id) {
+        const { discount, ...rest } = b;
+        return rest as Booking;
+      }
+      return b;
+    }));
+
+    setSelectedBooking(prev => {
+      if (prev?.id === id) {
+        const { discount, ...rest } = prev;
+        return rest as Booking;
+      }
+      return prev;
+    });
+
+    try {
+      await setDoc(doc(db, 'booking_requests', id), { discount: null }, { merge: true });
+      const { discount, ...restBookingData } = currentBooking;
+      const bookingData = {
+        ...restBookingData,
+        discount: null,
+        updatedAt: new Date().toISOString()
+      };
+      const cleanBookingData = Object.fromEntries(
+        Object.entries(bookingData).filter(([_, v]) => v !== undefined)
+      );
+      await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
+    } catch (error) {
+      console.error('Error removing discount:', error);
     }
   };
 
@@ -889,7 +1027,19 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     }
   };
 
-  const getTotalAmount = (b: Booking) => b.baseAmount + b.extraCharges.reduce((s, c) => s + c.amount, 0);
+  const getDiscountAmount = (b: Booking) => {
+    if (!b.discount) return 0;
+    const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    if (b.discount.type === 'percentage') {
+      return (subtotal * b.discount.value) / 100;
+    }
+    return b.discount.value;
+  };
+
+  const getTotalAmount = (b: Booking) => {
+    const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    return subtotal - getDiscountAmount(b);
+  };
 
   const enquiries = bookings.filter(b => b.status === 'new_enquiry');
   const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed');
@@ -929,11 +1079,11 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
         const existing = customerMap[key];
         existing.totalBookings += 1;
         existing.totalSpent += spent;
-        
+
         if (b.date && b.date > existing.lastEvent) {
           existing.lastEvent = b.date;
         }
-        
+
         if (isActive) {
           existing.status = 'active';
         }
@@ -973,17 +1123,24 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     return calendarBookings.filter(b => b.date === dateStr);
   };
 
-  const navItems: { id: AdminTab; label: string; icon: string; badge?: number }[] = [
+  const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
-    { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries },
-    { id: 'bookings', label: 'Bookings', icon: 'CalendarDaysIcon', badge: activeBookings.length || undefined },
-    { id: 'calendar', label: 'Calendar', icon: 'CalendarIcon' },
-    { id: 'customers', label: 'Customers', icon: 'UsersIcon' },
-    { id: 'payments', label: 'Payments', icon: 'CreditCardIcon' },
-    { id: 'menus', label: 'Menus', icon: 'ClipboardDocumentListIcon' },
-    { id: 'history', label: 'History', icon: 'ArchiveBoxIcon' },
-    { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon' },
+    { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries, requiredPerm: 'manage_enquiries' },
+    { id: 'bookings', label: 'Bookings', icon: 'CalendarDaysIcon', badge: activeBookings.length || undefined, requiredPerm: 'manage_bookings' },
+    { id: 'calendar', label: 'Calendar', icon: 'CalendarIcon', requiredPerm: 'manage_calendar' },
+    { id: 'customers', label: 'Customers', icon: 'UsersIcon', requiredPerm: 'manage_customers' },
+    { id: 'payments', label: 'Payments', icon: 'CreditCardIcon', requiredPerm: 'manage_payments' },
+    { id: 'menus', label: 'Menus', icon: 'ClipboardDocumentListIcon', requiredPerm: 'manage_menus' },
+    { id: 'history', label: 'History', icon: 'ArchiveBoxIcon', requiredPerm: 'manage_history' },
+    { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
+    { id: 'access', label: 'Access Control', icon: 'ShieldCheckIcon', requiredPerm: 'manage_access' },
   ];
+
+  const visibleNavItems = navItems.filter(item => {
+    if (userPermissions === 'all') return true;
+    if (!item.requiredPerm) return true; // always show overview if they log in
+    return userPermissions.includes(item.requiredPerm);
+  });
 
   // ─── AUTHENTICATION LOADING ────────────────────────────────────────────────
   if (loadingAuth) {
@@ -1020,7 +1177,16 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Password</label>
-              <input type="password" required value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="••••••••" />
+              <div className="relative">
+                <input type={showPassword ? "text" : "password"} required value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="••••••••" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  <Icon name={showPassword ? 'EyeSlashIcon' : 'EyeIcon'} size={20} />
+                </button>
+              </div>
             </div>
             {loginError && <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 text-xs">{loginError}</div>}
             <button type="submit" disabled={isLoggingIn} className="w-full text-white font-semibold py-2.5 rounded-xl transition-all text-sm shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
@@ -1050,7 +1216,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === item.id ? 'text-white shadow-md' : 'hover:text-white'}`}
               style={activeTab === item.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' } : { color: '#A08060' }}>
@@ -1066,11 +1232,11 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               <Icon name="UserCircleIcon" size={16} style={{ color: '#F0A830' }} />
             </div>
             <div>
-              <div className="text-white text-xs font-medium">Admin</div>
-              <div className="text-xs" style={{ color: '#A08060' }}>honeymoonadmin@gmail.com</div>
+              <div className="text-white text-xs font-medium">{currentUser?.name || 'Admin'}</div>
+              <div className="text-xs" style={{ color: '#A08060' }}>{currentUser?.email || ''}</div>
             </div>
           </div>
-          <button 
+          <button
             onClick={async () => {
               try {
                 await signOut(auth);
@@ -1078,8 +1244,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               } catch (error) {
                 console.error("Error signing out:", error);
               }
-            }} 
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:text-white" 
+            }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors hover:text-white"
             style={{ color: '#A08060' }}
           >
             <Icon name="ArrowRightOnRectangleIcon" size={17} />
@@ -1265,6 +1431,24 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         <div className="text-sm font-medium text-gray-800">{f.value}</div>
                       </div>
                     ))}
+                  </div>
+                  {/* Package Selection Banner */}
+                  <div className="mt-3">
+                    {b.package && b.package !== 'Not Selected' ? (
+                      <div className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 border" style={{ background: 'rgba(200,134,10,0.06)', borderColor: 'rgba(200,134,10,0.25)' }}>
+                        <span className="text-lg">🎁</span>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#C8860A' }}>Preferred Package</div>
+                          <div className="text-sm font-bold text-gray-900">{b.package}</div>
+                        </div>
+                        <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,134,10,0.15)', color: '#A06A05' }}>Customer Selected</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 border border-gray-100 bg-gray-50">
+                        <span className="text-base">📋</span>
+                        <div className="text-sm text-gray-400">No specific package selected — customer needs guidance</div>
+                      </div>
+                    )}
                   </div>
 
                   {b.notes && (
@@ -2064,14 +2248,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                       <div className="flex items-center gap-1"><Icon name="CheckCircleIcon" size={14} className="text-emerald-500" /><span className="text-emerald-700 font-medium text-xs">Fully Paid</span></div>
                     </div>
                   </div>
-                  
+
                   {/* Payment proofs */}
                   {(b.paymentProofDeposit || b.paymentProofFinal) && (
                     <div className="border-t border-gray-100 pt-4 mt-4">
                       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Payment Proofs</div>
                       <div className="flex gap-3">
                         {b.paymentProofDeposit && (
-                          <div 
+                          <div
                             className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group bg-gray-50 flex-shrink-0"
                             onClick={() => {
                               if (b.paymentProofDeposit?.startsWith('data:image')) {
@@ -2091,7 +2275,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           </div>
                         )}
                         {b.paymentProofFinal && (
-                          <div 
+                          <div
                             className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group bg-gray-50 flex-shrink-0"
                             onClick={() => {
                               if (b.paymentProofFinal?.startsWith('data:image')) {
@@ -2160,10 +2344,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Address</label>
                       <input type="text" value={venueDetails.address} onChange={(e) => setVenueDetails(prev => ({ ...prev, address: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
                     </div>
-                    <button 
-                      onClick={saveVenueDetails} 
+                    <button
+                      onClick={saveVenueDetails}
                       disabled={isSavingVenueDetails}
-                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-1 shadow-md active:scale-95 disabled:opacity-50" 
+                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-1 shadow-md active:scale-95 disabled:opacity-50"
                       style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
                     >
                       {isSavingVenueDetails ? 'Saving...' : 'Save Changes'}
@@ -2239,6 +2423,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               </div>
             </div>
           )}
+          {activeTab === 'access' && (
+            <AccessControl />
+          )}
 
         </div>
       </main>
@@ -2310,13 +2497,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Event Type</span>
-                      <button 
-                        onClick={() => setIsEditingEventType(true)} 
-                        className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
-                      >
-                        <Icon name="PencilIcon" size={10} />
-                        Edit
-                      </button>
+                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                        <button
+                          onClick={() => setIsEditingEventType(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                        >
+                          <Icon name="PencilIcon" size={10} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-gray-900">{selectedBooking.eventType}</div>
                   </div>
@@ -2324,8 +2513,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-300">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Event Type</span>
-                      <button 
-                        onClick={() => setIsEditingEventType(false)} 
+                      <button
+                        onClick={() => setIsEditingEventType(false)}
                         className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
                       >
                         Cancel
@@ -2362,13 +2551,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Package</span>
-                      <button 
-                        onClick={() => setIsEditingPackage(true)} 
-                        className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
-                      >
-                        <Icon name="PencilIcon" size={10} />
-                        Edit
-                      </button>
+                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                        <button
+                          onClick={() => setIsEditingPackage(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                        >
+                          <Icon name="PencilIcon" size={10} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-gray-900 truncate" title={selectedBooking.selectedMenu || selectedBooking.package}>
                       {selectedBooking.selectedMenu || selectedBooking.package}
@@ -2378,8 +2569,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-300">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Package</span>
-                      <button 
-                        onClick={() => setIsEditingPackage(false)} 
+                      <button
+                        onClick={() => setIsEditingPackage(false)}
                         className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
                       >
                         Cancel
@@ -2417,13 +2608,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Date</span>
-                      <button 
-                        onClick={() => setIsEditingBookingDate(true)} 
-                        className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
-                      >
-                        <Icon name="PencilIcon" size={10} />
-                        Edit
-                      </button>
+                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                        <button
+                          onClick={() => setIsEditingBookingDate(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                        >
+                          <Icon name="PencilIcon" size={10} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-gray-900">
                       {selectedBooking.date ? selectedBooking.date.split('T')[0] : 'N/A'}
@@ -2433,8 +2626,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-300">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Date</span>
-                      <button 
-                        onClick={() => setIsEditingBookingDate(false)} 
+                      <button
+                        onClick={() => setIsEditingBookingDate(false)}
                         className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
                       >
                         Cancel
@@ -2450,7 +2643,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           const updatedBooking = { ...selectedBooking, date: newDate };
                           setSelectedBooking(updatedBooking);
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, date: newDate } : b));
-                          
+
                           await setDoc(doc(db, 'booking_requests', selectedBooking.id), { date: newDate }, { merge: true });
                           await setDoc(doc(db, 'bookings', selectedBooking.id), { date: newDate }, { merge: true });
                           setIsEditingBookingDate(false);
@@ -2467,13 +2660,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Time / Shift</span>
-                      <button 
-                        onClick={() => setIsEditingTime(true)} 
-                        className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
-                      >
-                        <Icon name="PencilIcon" size={10} />
-                        Edit
-                      </button>
+                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                        <button
+                          onClick={() => setIsEditingTime(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                        >
+                          <Icon name="PencilIcon" size={10} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-gray-900">{selectedBooking.time}</div>
                   </div>
@@ -2481,8 +2676,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-300">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Time / Shift</span>
-                      <button 
-                        onClick={() => setIsEditingTime(false)} 
+                      <button
+                        onClick={() => setIsEditingTime(false)}
                         className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
                       >
                         Cancel
@@ -2517,13 +2712,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Guests</span>
-                      <button 
-                        onClick={() => setIsEditingGuests(true)} 
-                        className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
-                      >
-                        <Icon name="PencilIcon" size={10} />
-                        Edit
-                      </button>
+                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                        <button
+                          onClick={() => setIsEditingGuests(true)}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                        >
+                          <Icon name="PencilIcon" size={10} />
+                          Edit
+                        </button>
+                      )}
                     </div>
                     <div className="text-sm font-medium text-gray-900">{selectedBooking.guests} people</div>
                   </div>
@@ -2531,8 +2728,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-300">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Guests</span>
-                      <button 
-                        onClick={() => setIsEditingGuests(false)} 
+                      <button
+                        onClick={() => setIsEditingGuests(false)}
                         className="text-[10px] text-gray-400 hover:text-gray-600 font-medium transition-colors"
                       >
                         Cancel
@@ -2549,7 +2746,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         try {
                           let baseAmount = selectedBooking.baseAmount || 0;
                           let deposit = selectedBooking.deposit || 0;
-                          
+
                           const currentPkg = selectedBooking.selectedMenu || selectedBooking.package;
                           if (currentPkg && currentPkg !== 'custom') {
                             const found = editableBanquetPackages.find(p => p.name === currentPkg);
@@ -2562,7 +2759,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           const updated = { ...selectedBooking, guests: val, baseAmount, deposit };
                           setSelectedBooking(updated);
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests: val, baseAmount, deposit } : b));
-                          
+
                           await setDoc(doc(db, 'booking_requests', selectedBooking.id), { guests: val, baseAmount, deposit }, { merge: true });
                           await setDoc(doc(db, 'bookings', selectedBooking.id), { guests: val, baseAmount, deposit }, { merge: true });
                           setIsEditingGuests(false);
@@ -2598,10 +2795,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         onChange={async (e) => {
                           const val = e.target.value;
                           if (!val) return;
-                          
+
                           let pricePerPerson = 0;
                           let selectedPkgName = '';
-                          
+
                           if (val === 'custom') {
                             selectedPkgName = 'Custom Package';
                           } else {
@@ -2609,12 +2806,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             if (found) {
                               pricePerPerson = found.pricePerPerson;
                               selectedPkgName = found.name;
+                            } else {
+                              selectedPkgName = val;
+                              pricePerPerson = 0; // Manual pricing for Venue Hire, etc.
                             }
                           }
-                          
+
                           const baseAmount = pricePerPerson * selectedBooking.guests;
                           const deposit = Math.round(baseAmount * 0.3); // 30% deposit standard
-                          
+
                           // Update locally
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                             ...b,
@@ -2630,7 +2830,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             baseAmount,
                             deposit
                           } : prev);
-                          
+
                           // Save to Firestore
                           try {
                             const updates = {
@@ -2652,12 +2852,22 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
                       >
                         <option value="">-- Choose Package --</option>
-                        {editableBanquetPackages.map(pkg => (
-                          <option key={pkg.id} value={pkg.name}>
-                            {pkg.name} (£{pkg.pricePerPerson}/person)
-                          </option>
-                        ))}
-                        <option value="custom">Custom Price Package</option>
+                        <optgroup label="Buffet Packages">
+                          {editableBanquetPackages.map(pkg => (
+                            <option key={pkg.id} value={pkg.name}>
+                              {pkg.name} (£{pkg.pricePerPerson}/person)
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Other Enquiries">
+                          <option value="Venue Hire">Venue Hire</option>
+                          <option value="Dry Hire">Dry Hire</option>
+                          <option value="Table Service">Table Service</option>
+                          <option value="Kids Pricing">Kids Pricing</option>
+                        </optgroup>
+                        <optgroup label="Custom">
+                          <option value="custom">Custom Price Package</option>
+                        </optgroup>
                       </select>
                     </div>
 
@@ -2672,7 +2882,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             onChange={async (e) => {
                               const baseAmount = Number(e.target.value) || 0;
                               const deposit = Math.round(baseAmount * 0.3);
-                              
+
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
                                 baseAmount,
@@ -2683,7 +2893,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                                 baseAmount,
                                 deposit
                               } : prev);
-                              
+
                               try {
                                 await setDoc(doc(db, 'booking_requests', selectedBooking.id), { baseAmount, deposit }, { merge: true });
                                 await setDoc(doc(db, 'bookings', selectedBooking.id), { baseAmount, deposit, updatedAt: new Date().toISOString() }, { merge: true });
@@ -2701,7 +2911,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             value={selectedBooking.deposit || 0}
                             onChange={async (e) => {
                               const deposit = Number(e.target.value) || 0;
-                              
+
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
                                 deposit
@@ -2710,7 +2920,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                                 ...prev,
                                 deposit
                               } : prev);
-                              
+
                               try {
                                 await setDoc(doc(db, 'booking_requests', selectedBooking.id), { deposit }, { merge: true });
                                 await setDoc(doc(db, 'bookings', selectedBooking.id), { deposit, updatedAt: new Date().toISOString() }, { merge: true });
@@ -2799,7 +3009,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   {selectedBooking.paymentProofDeposit ? (
                     <div className="flex items-start gap-4">
                       {(selectedBooking.paymentProofDeposit.startsWith('http') || selectedBooking.paymentProofDeposit.startsWith('data:image')) && (
-                        <div 
+                        <div
                           className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group flex-shrink-0 bg-gray-50"
                           onClick={() => {
                             if (selectedBooking.paymentProofDeposit?.startsWith('data:image')) {
@@ -2811,9 +3021,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           }}
                           title="Click to view full image"
                         >
-                          <img 
-                            src={selectedBooking.paymentProofDeposit} 
-                            alt="Payment Proof" 
+                          <img
+                            src={selectedBooking.paymentProofDeposit}
+                            alt="Payment Proof"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -2827,19 +3037,19 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           Payment proof received
                         </div>
                         <div className="flex items-center">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            id="proof-reupload" 
-                            className="hidden" 
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id="proof-reupload"
+                            className="hidden"
                             onChange={(e) => {
                               if (e.target.files && e.target.files[0]) {
                                 handleUploadProof(selectedBooking.id, e.target.files[0]);
                               }
                             }}
                           />
-                          <label 
-                            htmlFor="proof-reupload" 
+                          <label
+                            htmlFor="proof-reupload"
                             className="cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 font-medium"
                           >
                             <Icon name="ArrowPathIcon" size={14} />
@@ -2852,19 +3062,19 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                     <div className="flex flex-col gap-3">
                       <div className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">Awaiting payment screenshot from customer via WhatsApp</div>
                       <div className="flex items-center gap-2">
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          id="proof-upload" 
-                          className="hidden" 
+                        <input
+                          type="file"
+                          accept="image/*"
+                          id="proof-upload"
+                          className="hidden"
                           onChange={(e) => {
                             if (e.target.files && e.target.files[0]) {
                               handleUploadProof(selectedBooking.id, e.target.files[0]);
                             }
                           }}
                         />
-                        <label 
-                          htmlFor="proof-upload" 
+                        <label
+                          htmlFor="proof-upload"
                           className="cursor-pointer bg-white border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm"
                         >
                           <Icon name="ArrowUpTrayIcon" size={16} />
@@ -2905,6 +3115,74 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </div>
               )}
 
+              {/* Step: Apply Discount */}
+              {selectedBooking.status === 'event_completed' && (
+                <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mt-4">
+                  <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-3">Apply Discount</div>
+                  {selectedBooking.discount ? (
+                    <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-indigo-100">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold text-indigo-900">
+                          {selectedBooking.discount.type === 'percentage' ? `${selectedBooking.discount.value}%` : `£${selectedBooking.discount.value}`} Discount
+                        </span>
+                        <span className="text-xs text-gray-500">{selectedBooking.discount.reason}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-red-600">-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
+                        <button onClick={() => removeDiscount(selectedBooking.id)} className="text-red-400 hover:text-red-600">
+                          <Icon name="XMarkIcon" size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'fixed' | 'percentage')} className="border border-indigo-200 rounded-lg px-2 py-2 text-sm focus:outline-none bg-white flex-shrink-0">
+                          <option value="fixed">£ Fixed</option>
+                          <option value="percentage">% Percent</option>
+                        </select>
+                        <input type="number" placeholder="Value" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="flex-1 min-w-0 border border-indigo-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Reason (e.g. Loyalty)"
+                            value={discountReason}
+                            onChange={(e) => { setDiscountReason(e.target.value); if (e.target.value.trim()) setDiscountError(''); }}
+                            className={`flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm focus:outline-none bg-white ${discountError ? 'border-red-400 focus:border-red-500' : 'border-indigo-200'}`}
+                          />
+                          <button
+                            onClick={() => {
+                              if (!discountReason.trim()) {
+                                setDiscountError('Please enter a reason for the discount.');
+                                return;
+                              }
+                              if (!discountValue) {
+                                setDiscountError('Please enter a discount value.');
+                                return;
+                              }
+                              setDiscountError('');
+                              applyDiscount(selectedBooking.id);
+                            }}
+                            className="text-white text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-colors flex-shrink-0 shadow-sm flex items-center gap-1"
+                          >
+                            <Icon name="CheckIcon" size={16} />
+                            Apply
+                          </button>
+                        </div>
+                        {discountError && (
+                          <p className="text-xs text-red-500 flex items-center gap-1">
+                            <Icon name="ExclamationCircleIcon" size={13} />
+                            {discountError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Step: Final Invoice */}
               {(selectedBooking.status === 'event_completed' || selectedBooking.status === 'final_invoice_sent') && (
                 <div className="border border-yellow-200 rounded-xl p-4 bg-yellow-50">
@@ -2920,6 +3198,12 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         <span className="font-medium text-amber-700">+£{c.amount.toLocaleString()}</span>
                       </div>
                     ))}
+                    {selectedBooking.discount && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Discount ({selectedBooking.discount.reason})</span>
+                        <span className="font-medium text-red-600">-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
                       <span className="text-gray-600">Deposit Paid</span>
                       <span className="font-medium text-emerald-700">-£{selectedBooking.deposit.toLocaleString()}</span>
@@ -2946,7 +3230,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   {selectedBooking.paymentProofFinal ? (
                     <div className="flex items-start gap-4">
                       {(selectedBooking.paymentProofFinal.startsWith('http') || selectedBooking.paymentProofFinal.startsWith('data:image')) && (
-                        <div 
+                        <div
                           className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group flex-shrink-0 bg-gray-50"
                           onClick={() => {
                             if (selectedBooking.paymentProofFinal?.startsWith('data:image')) {
@@ -2958,9 +3242,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           }}
                           title="Click to view full image"
                         >
-                          <img 
-                            src={selectedBooking.paymentProofFinal} 
-                            alt="Final Payment Proof" 
+                          <img
+                            src={selectedBooking.paymentProofFinal}
+                            alt="Final Payment Proof"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -2974,19 +3258,19 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           Final payment proof received — confirm below
                         </div>
                         <div className="flex items-center">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            id="final-proof-reupload" 
-                            className="hidden" 
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id="final-proof-reupload"
+                            className="hidden"
                             onChange={(e) => {
                               if (e.target.files && e.target.files[0]) {
                                 handleUploadFinalProof(selectedBooking.id, e.target.files[0]);
                               }
                             }}
                           />
-                          <label 
-                            htmlFor="final-proof-reupload" 
+                          <label
+                            htmlFor="final-proof-reupload"
                             className="cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 font-medium"
                           >
                             <Icon name="ArrowPathIcon" size={14} />
@@ -2999,19 +3283,19 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                     <div className="flex flex-col gap-3">
                       <div className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">Awaiting final payment screenshot from customer via WhatsApp</div>
                       <div className="flex items-center gap-2">
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          id="final-proof-upload" 
-                          className="hidden" 
+                        <input
+                          type="file"
+                          accept="image/*"
+                          id="final-proof-upload"
+                          className="hidden"
                           onChange={(e) => {
                             if (e.target.files && e.target.files[0]) {
                               handleUploadFinalProof(selectedBooking.id, e.target.files[0]);
                             }
                           }}
                         />
-                        <label 
-                          htmlFor="final-proof-upload" 
+                        <label
+                          htmlFor="final-proof-upload"
                           className="cursor-pointer bg-white border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm"
                         >
                           <Icon name="ArrowUpTrayIcon" size={16} />
@@ -3083,10 +3367,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </button>
               )}
               {selectedBooking.status === 'deposit_pending' && (
-                <button onClick={() => confirmDepositPaid(selectedBooking.id)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
-                  <Icon name="CheckCircleIcon" size={16} />
-                  Confirm Deposit Received
+                <button
+                  onClick={() => confirmDepositPaid(selectedBooking.id)}
+                  disabled={!selectedBooking.paymentProofDeposit}
+                  title={!selectedBooking.paymentProofDeposit ? "Please upload the payment screenshot first" : ""}
+                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofDeposit ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                >
+                  <Icon name={!selectedBooking.paymentProofDeposit ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                  {!selectedBooking.paymentProofDeposit ? 'Upload Screenshot to Proceed' : 'Confirm Deposit Received'}
                 </button>
               )}
               {selectedBooking.status === 'deposit_confirmed' && (
@@ -3122,10 +3410,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </button>
               )}
               {selectedBooking.status === 'final_invoice_sent' && (
-                <button onClick={() => confirmFinalPayment(selectedBooking.id)}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
-                  <Icon name="CheckCircleIcon" size={16} />
-                  Confirm Final Payment Received
+                <button
+                  onClick={() => confirmFinalPayment(selectedBooking.id)}
+                  disabled={!selectedBooking.paymentProofFinal}
+                  title={!selectedBooking.paymentProofFinal ? "Please upload the payment screenshot first" : ""}
+                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofFinal ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                >
+                  <Icon name={!selectedBooking.paymentProofFinal ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                  {!selectedBooking.paymentProofFinal ? 'Upload Screenshot to Proceed' : 'Confirm Final Payment'}
                 </button>
               )}
               {selectedBooking.status === 'final_payment_received' && (

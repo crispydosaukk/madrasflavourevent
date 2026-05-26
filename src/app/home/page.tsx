@@ -71,8 +71,14 @@ export default function HomePage() {
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
 
   const [bookingForm, setBookingForm] = useState({
-    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '',
+    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
   });
+
+  const handleEnquireNow = (packageName: string) => {
+    setBookingForm(prev => ({ ...prev, selectedPackage: packageName }));
+    const el = document.getElementById('book');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const [submitted, setSubmitted] = useState(false);
   const [activeMenuTab, setActiveMenuTab] = useState<MenuTab>('packages');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -124,11 +130,12 @@ export default function HomePage() {
         timeOfDay: bookingForm.timeOfDay,
         guests: Number(bookingForm.guests),
         message: bookingForm.message,
+        package: bookingForm.selectedPackage || 'Not Selected',
         createdAt: new Date().toISOString()
       });
       setSubmitted(true);
       setPhoneError('');
-      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '' });
+      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
     } catch (error) {
       console.error("Error adding document: ", error);
       setCustomHomeAlert({
@@ -175,7 +182,7 @@ export default function HomePage() {
           </div>
 
           {/* ── Right: Booking form card ── */}
-          <div className="w-full lg:w-[480px] flex-shrink-0">
+          <div id="book" className="w-full lg:w-[480px] flex-shrink-0">
             <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-7">
               <h2 className="text-xl font-bold text-gray-900 text-center mb-1">Request a Booking</h2>
               <p className="text-sm text-gray-500 text-center mb-5">Fill in your details and we'll get back to you within 24 hours</p>
@@ -229,6 +236,31 @@ export default function HomePage() {
                         {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
+                  </div>
+                  {/* Preferred Package */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                      <span style={{ color: '#C8860A' }}>🎁</span> Preferred Package
+                      {bookingForm.selectedPackage && (
+                        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(200,134,10,0.12)', color: '#C8860A' }}>Auto-selected</span>
+                      )}
+                    </label>
+                    <select
+                      value={bookingForm.selectedPackage}
+                      onChange={(e) => setBookingForm({ ...bookingForm, selectedPackage: e.target.value })}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white"
+                      style={bookingForm.selectedPackage ? { borderColor: '#C8860A', boxShadow: '0 0 0 1px rgba(200,134,10,0.3)' } : {}}
+                    >
+                      <option value="">No specific package – help me choose</option>
+                      <optgroup label="── Buffet Packages ──">
+                        {BANQUET_PACKAGES.map((pkg) => (
+                          <option key={pkg.id} value={pkg.name}>
+                            {pkg.name} — £{pkg.pricePerPerson}/person
+                          </option>
+                        ))}
+                      </optgroup>
+
+                    </select>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
@@ -401,15 +433,13 @@ export default function HomePage() {
                       </div>
                     </div>
                     <div className="px-5 pb-5">
-                      <a
-                        href={`https://wa.me/?text=${encodeURIComponent(`Hi, I'm interested in the *${pkg.name}* at £${pkg.pricePerPerson}/person. Could you please provide more details?`)}`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-colors"
-                        style={{ background: '#25D366', color: 'white' }}
+                      <button
+                        onClick={() => handleEnquireNow(pkg.name)}
+                        className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
                       >
-                        <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                        Enquire via WhatsApp
-                      </a>
+                        Enquire Now
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -460,9 +490,9 @@ export default function HomePage() {
 
               {/* Table Service & Kids Pricing */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Table Service <span className="text-sm font-normal text-gray-500">(Extra Charges Apply)</span></h3>
-                  <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="grid grid-cols-2 gap-3 mt-4 flex-grow">
                     {TABLE_SERVICE.map((ts) => (
                       <div key={ts.service} className="bg-gray-50 rounded-xl p-3">
                         <div className="text-xs text-gray-500 mb-0.5">{ts.service}</div>
@@ -471,7 +501,7 @@ export default function HomePage() {
                     ))}
                   </div>
                 </div>
-                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Kids Pricing <span className="text-sm font-normal text-gray-500">(Only Applies for over 50 Adults)</span></h3>
                   <div className="flex flex-wrap gap-3 mt-4">
                     {KIDS_PRICING.map((kp) => (
@@ -595,12 +625,10 @@ export default function HomePage() {
               </div>
 
               <div className="text-center">
-                <a href={`https://wa.me/?text=${encodeURIComponent('Hi, I\'d like to enquire about the Indian Menu options for my event. Could you please share more details?')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl"
-                  style={{ background: '#25D366', color: 'white' }}>
-                  <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                  Enquire about Indian Menu via WhatsApp
+                <a href="#book"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  Enquire Now
                 </a>
               </div>
             </div>
@@ -711,12 +739,10 @@ export default function HomePage() {
               </div>
 
               <div className="text-center">
-                <a href={`https://wa.me/?text=${encodeURIComponent('Hi, I\'d like to enquire about the Sri Lankan Menu options for my event. Could you please share more details?')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl"
-                  style={{ background: '#25D366', color: 'white' }}>
-                  <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                  Enquire about Sri Lankan Menu via WhatsApp
+                <a href="#book"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  Enquire Now
                 </a>
               </div>
             </div>
@@ -790,12 +816,10 @@ export default function HomePage() {
               </div>
 
               <div className="text-center">
-                <a href={`https://wa.me/?text=${encodeURIComponent('Hi, I\'d like to enquire about the Live Counter Package for my event. Could you please share more details and pricing?')}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl"
-                  style={{ background: '#25D366', color: 'white' }}>
-                  <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                  Enquire about Live Counter via WhatsApp
+                <a href="#book"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
+                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  Enquire Now
                 </a>
               </div>
             </div>
