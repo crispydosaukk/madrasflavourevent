@@ -61,6 +61,21 @@ export default function HomePage() {
     });
   }, []);
 
+  const [pricingDetails, setPricingDetails] = useState({
+    depositPercentage: 30,
+  });
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPricingDetails({
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+        });
+      }
+    });
+  }, []);
+
   React.useEffect(() => {
     return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
       const dates = snapshot.docs.map(doc => doc.id);
@@ -121,6 +136,10 @@ export default function HomePage() {
     }
     try {
       const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
+      const guestCount = Number(bookingForm.guests) || 0;
+      const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
+      const baseAmount = selectedPkg ? selectedPkg.pricePerPerson * guestCount : 0;
+      const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
       await addDoc(collection(db, 'booking_requests'), {
         name: bookingForm.name,
         email: bookingForm.email,
@@ -128,9 +147,11 @@ export default function HomePage() {
         eventType: bookingForm.eventType,
         date: bookingForm.date,
         timeOfDay: bookingForm.timeOfDay,
-        guests: Number(bookingForm.guests),
+        guests: guestCount,
         message: bookingForm.message,
         package: bookingForm.selectedPackage || 'Not Selected',
+        baseAmount,
+        deposit,
         createdAt: new Date().toISOString()
       });
       setSubmitted(true);

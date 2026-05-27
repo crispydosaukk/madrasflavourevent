@@ -439,6 +439,27 @@ export default function AdminPage() {
     });
   }, []);
 
+  const [pricingDetails, setPricingDetails] = useState({
+    depositPercentage: 30,
+    minimumBookingHours: 4,
+    weekdayRate: 350,
+    weekendRate: 550
+  });
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPricingDetails({
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+          minimumBookingHours: data.minimumBookingHours || 4,
+          weekdayRate: data.weekdayRate || 350,
+          weekendRate: data.weekendRate || 550
+        });
+      }
+    });
+  }, []);
+
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   type AdminMenuTab = 'banquet' | 'indian' | 'srilankan' | 'live';
   const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('banquet');
@@ -1099,6 +1120,21 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       setCustomAlert({ message: 'Error saving venue details.', type: 'error' });
     } finally {
       setIsSavingVenueDetails(false);
+    }
+  };
+
+  const [isSavingPricingDetails, setIsSavingPricingDetails] = useState(false);
+
+  const savePricingDetails = async () => {
+    setIsSavingPricingDetails(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'pricing_details'), pricingDetails, { merge: true });
+      setCustomAlert({ message: 'Pricing & Deposits successfully updated!', type: 'success' });
+    } catch (error) {
+      console.error('Error saving pricing details:', error);
+      setCustomAlert({ message: 'Error saving pricing details.', type: 'error' });
+    } finally {
+      setIsSavingPricingDetails(false);
     }
   };
 
@@ -2462,17 +2498,39 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                     Pricing & Deposits
                   </h3>
                   <div className="space-y-3">
-                    {[
-                      { label: 'Deposit Percentage', value: '30%' },
-                      { label: 'Minimum Booking Hours', value: '4' },
-                      { label: 'Weekday Rate (per hour)', value: '£350' },
-                      { label: 'Weekend Rate (per hour)', value: '£550' },
-                    ].map((field) => (
-                      <div key={field.label} className="flex items-center justify-between">
-                        <label className="text-sm text-gray-600">{field.label}</label>
-                        <input type="text" defaultValue={field.value} className="w-28 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-600">Deposit Percentage</label>
+                      <div className="flex items-center gap-1">
+                        <input type="number" value={pricingDetails.depositPercentage} onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                        <span className="text-gray-500 text-sm">%</span>
                       </div>
-                    ))}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-600">Minimum Booking Hours</label>
+                      <input type="number" value={pricingDetails.minimumBookingHours} onChange={e => setPricingDetails(p => ({ ...p, minimumBookingHours: Number(e.target.value) }))} className="w-28 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-600">Weekday Rate (per hour)</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 text-sm">£</span>
+                        <input type="number" value={pricingDetails.weekdayRate} onChange={e => setPricingDetails(p => ({ ...p, weekdayRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-gray-600">Weekend Rate (per hour)</label>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500 text-sm">£</span>
+                        <input type="number" value={pricingDetails.weekendRate} onChange={e => setPricingDetails(p => ({ ...p, weekendRate: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
+                      </div>
+                    </div>
+                    <button
+                      onClick={savePricingDetails}
+                      disabled={isSavingPricingDetails}
+                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-4 shadow-md active:scale-95 disabled:opacity-50 w-full"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                    >
+                      {isSavingPricingDetails ? 'Saving...' : 'Save Pricing & Deposits'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2710,7 +2768,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center gap-3">
                 {/* Back Arrow button to go one step back in workflow status */}
-                {STATUS_FLOW.indexOf(selectedBooking.status) > 0 && (
+                {STATUS_FLOW.indexOf(selectedBooking.status) > 0 && STATUS_FLOW.indexOf(selectedBooking.status) <= 3 && (
                   <button onClick={() => handleGoBackStatus(selectedBooking.id)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-700 transition-colors" title="Go one step back">
                     <Icon name="ArrowLeftIcon" size={20} />
                   </button>
@@ -3023,7 +3081,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             const found = editableBanquetPackages.find(p => p.name === currentPkg);
                             if (found) {
                               baseAmount = found.pricePerPerson * val;
-                              deposit = Math.round(baseAmount * 0.3);
+                              deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
                             }
                           }
 
@@ -3084,7 +3142,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           }
 
                           const baseAmount = pricePerPerson * selectedBooking.guests;
-                          const deposit = Math.round(baseAmount * 0.3); // 30% deposit standard
+                          const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
 
                           // Update locally
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
@@ -3152,7 +3210,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             value={selectedBooking.baseAmount || 0}
                             onChange={async (e) => {
                               const baseAmount = Number(e.target.value) || 0;
-                              const deposit = Math.round(baseAmount * 0.3);
+                              const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
