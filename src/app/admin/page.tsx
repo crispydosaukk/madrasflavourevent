@@ -25,6 +25,14 @@ interface Discount {
   reason: string;
 }
 
+interface DiscountRequest {
+  type: 'fixed' | 'percentage';
+  value: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt?: string;
+}
+
 interface Booking {
   id: string;
   name: string;
@@ -46,6 +54,7 @@ interface Booking {
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
   discount?: Discount;
+  discountRequest?: DiscountRequest;
   enquiryDate: string;
   updatedAt?: string;
   createdAt?: string;
@@ -229,7 +238,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access';
+type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -268,6 +277,8 @@ export default function AdminPage() {
           extraCharges: data.extraCharges || [],
           paymentProofDeposit: data.paymentProofDeposit,
           paymentProofFinal: data.paymentProofFinal,
+          discount: data.discount,
+          discountRequest: data.discountRequest,
           enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           updatedAt: data.updatedAt,
           createdAt: data.createdAt,
@@ -890,25 +901,27 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     }
   };
 
-  const applyDiscount = async (id: string) => {
+  const requestDiscount = async (id: string) => {
     if (!discountValue || !discountReason) return;
     const currentBooking = bookings.find(b => b.id === id);
     if (!currentBooking) return;
 
-    const discount: Discount = {
+    const discountReq: DiscountRequest = {
       type: discountType,
       value: parseFloat(discountValue),
-      reason: discountReason
+      reason: discountReason,
+      status: 'pending',
+      requestedAt: new Date().toISOString()
     };
 
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, discount } : b));
-    setSelectedBooking(prev => prev?.id === id ? { ...prev, discount } : prev);
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, discountRequest: discountReq } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, discountRequest: discountReq } : prev);
 
     try {
-      await setDoc(doc(db, 'booking_requests', id), { discount }, { merge: true });
+      await setDoc(doc(db, 'booking_requests', id), { discountRequest: discountReq }, { merge: true });
       const bookingData = {
         ...currentBooking,
-        discount,
+        discountRequest: discountReq,
         updatedAt: new Date().toISOString()
       };
       const cleanBookingData = Object.fromEntries(
@@ -916,11 +929,57 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       );
       await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
     } catch (error) {
-      console.error('Error applying discount:', error);
+      console.error('Error requesting discount:', error);
     }
 
     setDiscountValue('');
     setDiscountReason('');
+    setCustomAlert({ message: 'Request has been sent to Management. Please wait for confirmation.', type: 'success' });
+  };
+
+  const handleDiscountApproval = async (bookingId: string, approved: boolean) => {
+    const b = bookings.find(x => x.id === bookingId);
+    if (!b || !b.discountRequest) return;
+    
+    if (approved) {
+      const discount: Discount = {
+        type: b.discountRequest.type,
+        value: b.discountRequest.value,
+        reason: b.discountRequest.reason
+      };
+      
+      const reqUpdated = { ...b.discountRequest, status: 'approved' as const };
+      
+      setBookings(prev => prev.map(x => x.id === bookingId ? { ...x, discount, discountRequest: reqUpdated } : x));
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(prev => prev ? { ...prev, discount, discountRequest: reqUpdated } : prev);
+      }
+      
+      try {
+        await setDoc(doc(db, 'booking_requests', bookingId), { discount, discountRequest: reqUpdated }, { merge: true });
+        const cleanBookingData = { ...b, discount, discountRequest: reqUpdated, updatedAt: new Date().toISOString() };
+        const finalData = Object.fromEntries(Object.entries(cleanBookingData).filter(([_, v]) => v !== undefined));
+        await setDoc(doc(db, 'bookings', bookingId), finalData, { merge: true });
+      } catch (e) {
+        console.error(e);
+      }
+      setCustomAlert({ message: 'Discount approved successfully!', type: 'success' });
+    } else {
+      const reqUpdated = { ...b.discountRequest, status: 'rejected' as const };
+      setBookings(prev => prev.map(x => x.id === bookingId ? { ...x, discountRequest: reqUpdated } : x));
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(prev => prev ? { ...prev, discountRequest: reqUpdated } : prev);
+      }
+      try {
+        await setDoc(doc(db, 'booking_requests', bookingId), { discountRequest: reqUpdated }, { merge: true });
+        const cleanBookingData = { ...b, discountRequest: reqUpdated, updatedAt: new Date().toISOString() };
+        const finalData = Object.fromEntries(Object.entries(cleanBookingData).filter(([_, v]) => v !== undefined));
+        await setDoc(doc(db, 'bookings', bookingId), finalData, { merge: true });
+      } catch (e) {
+        console.error(e);
+      }
+      setCustomAlert({ message: 'Discount request rejected.', type: 'error' });
+    }
   };
 
   const removeDiscount = async (id: string) => {
@@ -1123,6 +1182,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     return calendarBookings.filter(b => b.date === dateStr);
   };
 
+  const pendingDiscounts = bookings.filter(b => b.discountRequest?.status === 'pending');
+  
   const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
     { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries, requiredPerm: 'manage_enquiries' },
@@ -1132,6 +1193,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     { id: 'payments', label: 'Payments', icon: 'CreditCardIcon', requiredPerm: 'manage_payments' },
     { id: 'menus', label: 'Menus', icon: 'ClipboardDocumentListIcon', requiredPerm: 'manage_menus' },
     { id: 'history', label: 'History', icon: 'ArchiveBoxIcon', requiredPerm: 'manage_history' },
+    { id: 'discount_approvals', label: 'Discount Approvals', icon: 'TagIcon', badge: pendingDiscounts.length || undefined, requiredPerm: 'manage_discounts' },
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
     { id: 'access', label: 'Access Control', icon: 'ShieldCheckIcon', requiredPerm: 'manage_access' },
   ];
@@ -2423,6 +2485,124 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               </div>
             </div>
           )}
+          {/* ─── DISCOUNT APPROVALS ─── */}
+          {activeTab === 'discount_approvals' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-5">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Icon name="TagIcon" size={18} style={{ color: '#C8860A' }} />
+                  Pending Discount Requests
+                </h3>
+                
+                {pendingDiscounts.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400 text-sm">
+                    <Icon name="CheckBadgeIcon" size={36} className="mx-auto mb-3 text-gray-300" />
+                    No pending discount requests
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {pendingDiscounts.map(b => {
+                      const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                      const discountReqVal = b.discountRequest?.type === 'percentage' 
+                        ? (totalBeforeDiscount * (b.discountRequest.value / 100))
+                        : (b.discountRequest?.value || 0);
+
+                      return (
+                        <div key={b.id} className="border border-gray-200 rounded-xl p-5 bg-white flex flex-col lg:flex-row gap-6 items-start shadow-sm hover:shadow-md transition-shadow">
+                          <div className="flex-1 space-y-4 w-full">
+                            {/* Customer & Event Info */}
+                            <div className="flex justify-between items-start flex-wrap gap-2">
+                              <div>
+                                <h4 className="font-bold text-gray-900 text-base">{b.name}</h4>
+                                <div className="text-xs text-gray-500 mt-1">{b.email} • {b.phone}</div>
+                              </div>
+                              <div className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-right">
+                                <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Requested Discount</div>
+                                <div className="font-bold text-amber-900 mt-0.5">
+                                  {b.discountRequest?.type === 'percentage' ? `${b.discountRequest.value}%` : `£${b.discountRequest?.value}`}
+                                  <span className="text-sm font-medium ml-1">(-£{discountReqVal.toLocaleString()})</span>
+                                </div>
+                                <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2">
+                              <div>
+                                <div className="text-xs text-gray-400 mb-0.5">Event Type</div>
+                                <div className="text-sm font-medium text-gray-800">{b.eventType}</div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-400 mb-0.5">Guests</div>
+                                <div className="text-sm font-medium text-gray-800">{b.guests}</div>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Total (Base + Extras)</span>
+                                <span className="font-semibold text-gray-900">£{totalBeforeDiscount.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-amber-600 font-medium">Requested Discount</span>
+                                <span className="font-bold text-amber-700">-£{discountReqVal.toLocaleString()}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-emerald-600 font-medium">Deposit Paid</span>
+                                <span className="font-semibold text-emerald-700">-£{b.deposit.toLocaleString()}</span>
+                              </div>
+                              <div className="border-t border-gray-200 pt-2 flex justify-between items-center mt-1">
+                                <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">Final Pending Amount <span className="text-[10px] text-gray-400 font-normal normal-case ml-1">(If Approved)</span></span>
+                                <span className="font-bold text-lg text-indigo-700">£{(totalBeforeDiscount - discountReqVal - b.deposit).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col items-center gap-3 w-full lg:w-48 flex-shrink-0">
+                            {/* Deposit Proof */}
+                            {b.paymentProofDeposit ? (
+                              <div className="w-full text-center">
+                                <div className="text-xs font-semibold text-gray-500 mb-1.5">Advance Payment</div>
+                                <div 
+                                  className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
+                                  onClick={() => {
+                                    if (b.paymentProofDeposit?.startsWith('data:image')) {
+                                      const w = window.open('');
+                                      w?.document.write(`<img src="${b.paymentProofDeposit}" style="max-width: 100%; height: auto;"/>`);
+                                    } else {
+                                      window.open(b.paymentProofDeposit, '_blank');
+                                    }
+                                  }}
+                                >
+                                  <img src={b.paymentProofDeposit} alt="Deposit Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Icon name="MagnifyingGlassPlusIcon" size={20} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-full h-24 bg-gray-50 border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400">
+                                <Icon name="PhotoIcon" size={20} className="mb-1" />
+                                <span className="text-[10px] font-medium">No Deposit Photo</span>
+                              </div>
+                            )}
+                            
+                            <div className="flex gap-2 w-full mt-auto">
+                              <button onClick={() => handleDiscountApproval(b.id, false)} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
+                                <Icon name="XMarkIcon" size={14} /> Reject
+                              </button>
+                              <button onClick={() => handleDiscountApproval(b.id, true)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-xs transition-colors shadow-sm flex items-center justify-center gap-1">
+                                <Icon name="CheckIcon" size={14} /> Approve
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {activeTab === 'access' && (
             <AccessControl />
           )}
@@ -3134,8 +3314,26 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         </button>
                       </div>
                     </div>
+                  ) : selectedBooking.discountRequest?.status === 'pending' ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-amber-700">
+                            {selectedBooking.discountRequest.type === 'percentage' ? `${selectedBooking.discountRequest.value}%` : `£${selectedBooking.discountRequest.value}`} Discount Requested
+                          </span>
+                          <span className="text-xs text-gray-500">{selectedBooking.discountRequest.reason}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-amber-600 bg-amber-100 px-2 py-1 rounded-full">Pending Approval</span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 text-center italic mt-1">Waiting for Management confirmation. You cannot proceed to Final Invoice until approved or rejected.</p>
+                    </div>
                   ) : (
                     <div className="flex flex-col gap-2">
+                      {selectedBooking.discountRequest?.status === 'rejected' && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-2 rounded-lg mb-2">
+                          Discount not approved by Management. You can submit a new request if needed.
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'fixed' | 'percentage')} className="border border-indigo-200 rounded-lg px-2 py-2 text-sm focus:outline-none bg-white flex-shrink-0">
                           <option value="fixed">£ Fixed</option>
@@ -3163,7 +3361,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                                 return;
                               }
                               setDiscountError('');
-                              applyDiscount(selectedBooking.id);
+                              requestDiscount(selectedBooking.id);
                             }}
                             className="text-white text-sm font-semibold px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 transition-colors flex-shrink-0 shadow-sm flex items-center gap-1"
                           >
@@ -3184,7 +3382,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               )}
 
               {/* Step: Final Invoice */}
-              {(selectedBooking.status === 'event_completed' || selectedBooking.status === 'final_invoice_sent') && (
+              {(selectedBooking.status === 'event_completed' || selectedBooking.status === 'final_invoice_sent') && selectedBooking.discountRequest?.status !== 'pending' && (
                 <div className="border border-yellow-200 rounded-xl p-4 bg-yellow-50">
                   <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-3">Final Invoice</div>
                   <div className="bg-white rounded-lg p-4 border border-yellow-100 space-y-2 mb-3">
@@ -3403,10 +3601,11 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               )}
               {selectedBooking.status === 'event_completed' && (
                 <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
-                  className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
+                  disabled={selectedBooking.discountRequest?.status === 'pending'}
+                  className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
                   style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
                   <Icon name="DocumentTextIcon" size={16} />
-                  Send Final Invoice (above)
+                  {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
                 </button>
               )}
               {selectedBooking.status === 'final_invoice_sent' && (
