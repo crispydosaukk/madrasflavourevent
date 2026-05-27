@@ -251,6 +251,20 @@ export default function AdminPage() {
   const [isEditingPackage, setIsEditingPackage] = useState(false);
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [isEditingGuests, setIsEditingGuests] = useState(false);
+  const [discountTab, setDiscountTab] = useState<'pending' | 'history'>('pending');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('adminActiveTab') as AdminTab | null;
+      if (savedTab) setActiveTab(savedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminActiveTab', activeTab);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     const q = query(collection(db, 'booking_requests'), orderBy('createdAt', 'desc'));
@@ -297,7 +311,7 @@ export default function AdminPage() {
   const [showPassword, setShowPassword] = useState(false);
   
   const [userPermissions, setUserPermissions] = useState<string[] | 'all'>('all');
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -310,10 +324,11 @@ export default function AdminPage() {
           if (!usersSnap.empty) {
             // Found a managed user document
             const userData = usersSnap.docs[0].data();
-            setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '' });
+            let roleName = 'Staff';
             if (userData.roleId) {
               const roleDoc = await getDoc(doc(db, 'roles', userData.roleId));
               if (roleDoc.exists()) {
+                roleName = roleDoc.data().name || 'Staff';
                 const rolePermIds: string[] = roleDoc.data().permissionIds || [];
                 // Resolve permission IDs → title strings for sidebar filtering
                 const permTitles: string[] = [];
@@ -330,14 +345,15 @@ export default function AdminPage() {
             } else {
               setUserPermissions([]); // No role assigned
             }
+            setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '', role: roleName });
           } else {
             // No user doc found → original super admin (honeymoonadmin)
-            setCurrentUser({ name: 'Admin', email: user.email || '' });
+            setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
             setUserPermissions('all');
           }
         } catch (e) {
           console.error("Error fetching permissions:", e);
-          setCurrentUser({ name: 'Admin', email: user.email || '' });
+          setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
           setUserPermissions([]);
         }
         setLoggedIn(true);
@@ -978,7 +994,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       } catch (e) {
         console.error(e);
       }
-      setCustomAlert({ message: 'Discount request rejected.', type: 'error' });
+      setCustomAlert({ message: 'Discount request rejected.', type: 'success' });
     }
   };
 
@@ -1294,7 +1310,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               <Icon name="UserCircleIcon" size={16} style={{ color: '#F0A830' }} />
             </div>
             <div>
-              <div className="text-white text-xs font-medium">{currentUser?.name || 'Admin'}</div>
+              <div className="text-xs font-semibold" style={{ color: '#F0A830' }}>{currentUser?.role || 'Super Admin'}</div>
               <div className="text-xs" style={{ color: '#A08060' }}>{currentUser?.email || ''}</div>
             </div>
           </div>
@@ -1302,6 +1318,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
             onClick={async () => {
               try {
                 await signOut(auth);
+                setActiveTab('overview');
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('adminActiveTab');
+                }
                 setLoggedIn(false);
               } catch (error) {
                 console.error("Error signing out:", error);
@@ -1572,6 +1592,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Event</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Date</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Amount</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">WhatsApp</th>
                         <th className="px-4 py-3"></th>
@@ -1602,6 +1623,13 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           <td className="px-4 py-3.5">
                             <div className="text-sm font-semibold text-gray-900">£{getTotalAmount(booking).toLocaleString()}</div>
                             {booking.depositPaid && <div className="text-xs text-emerald-600">Dep. paid</div>}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {booking.discount ? (
+                              <div className="text-sm font-semibold text-red-600">-£{getDiscountAmount(booking).toLocaleString()}</div>
+                            ) : (
+                              <div className="text-sm text-gray-400">—</div>
+                            )}
                           </td>
                           <td className="px-4 py-3.5">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[booking.status]}`}>
@@ -1812,6 +1840,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Customer</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Event</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Total</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Discount</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Deposit</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Balance</th>
                         <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Deposit Proof</th>
@@ -1834,6 +1863,13 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                               <div className="text-xs text-gray-400">{b.date}</div>
                             </td>
                             <td className="px-4 py-3.5 text-sm font-semibold text-gray-900">£{total.toLocaleString()}</td>
+                            <td className="px-4 py-3.5">
+                              {b.discount ? (
+                                <div className="text-sm font-semibold text-red-600">-£{getDiscountAmount(b).toLocaleString()}</div>
+                              ) : (
+                                <div className="text-sm text-gray-400">—</div>
+                              )}
+                            </td>
                             <td className="px-4 py-3.5">
                               <div className={`text-sm font-medium ${b.depositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>£{b.deposit.toLocaleString()}</div>
                               <div className="text-xs text-gray-400">{b.depositPaid ? '✓ Paid' : 'Pending'}</div>
@@ -2306,6 +2342,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                       {b.extraCharges.length > 0 && (
                         <div><span className="text-gray-500">Extras: </span><span className="font-semibold text-amber-700">+£{b.extraCharges.reduce((s, c) => s + c.amount, 0).toLocaleString()}</span></div>
                       )}
+                      {b.discount && (
+                        <div><span className="text-gray-500">Discount: </span><span className="font-semibold text-red-600">-£{getDiscountAmount(b).toLocaleString()}</span></div>
+                      )}
                       <div><span className="text-gray-500">Total: </span><span className="font-bold" style={{ color: '#C8860A' }}>£{getTotalAmount(b).toLocaleString()}</span></div>
                       <div className="flex items-center gap-1"><Icon name="CheckCircleIcon" size={14} className="text-emerald-500" /><span className="text-emerald-700 font-medium text-xs">Fully Paid</span></div>
                     </div>
@@ -2489,36 +2528,151 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
           {activeTab === 'discount_approvals' && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-5">
-                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Icon name="TagIcon" size={18} style={{ color: '#C8860A' }} />
-                  Pending Discount Requests
-                </h3>
-                
-                {pendingDiscounts.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400 text-sm">
-                    <Icon name="CheckBadgeIcon" size={36} className="mx-auto mb-3 text-gray-300" />
-                    No pending discount requests
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <Icon name="TagIcon" size={18} style={{ color: '#C8860A' }} />
+                    Discount Approvals
+                  </h3>
+                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button onClick={() => setDiscountTab('pending')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${discountTab === 'pending' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>Pending Requests</button>
+                    <button onClick={() => setDiscountTab('history')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${discountTab === 'history' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>History</button>
                   </div>
-                ) : (
-                  <div className="space-y-4">
-                    {pendingDiscounts.map(b => {
-                      const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-                      const discountReqVal = b.discountRequest?.type === 'percentage' 
-                        ? (totalBeforeDiscount * (b.discountRequest.value / 100))
-                        : (b.discountRequest?.value || 0);
+                </div>
+                
+                {discountTab === 'pending' ? (
+                  pendingDiscounts.length === 0 ? (
+                    <div className="text-center py-12 text-gray-400 text-sm">
+                      <Icon name="CheckBadgeIcon" size={36} className="mx-auto mb-3 text-gray-300" />
+                      No pending discount requests
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {pendingDiscounts.map(b => {
+                        const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                          ? (totalBeforeDiscount * (b.discountRequest.value / 100))
+                          : (b.discountRequest?.value || 0);
 
-                      return (
-                        <div key={b.id} className="border border-gray-200 rounded-xl p-5 bg-white flex flex-col lg:flex-row gap-6 items-start shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex-1 space-y-4 w-full">
-                            {/* Customer & Event Info */}
+                        return (
+                          <div key={b.id} className="border border-gray-200 rounded-xl p-5 bg-white flex flex-col lg:flex-row gap-6 items-start shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex-1 space-y-4 w-full">
+                              {/* Customer & Event Info */}
+                              <div className="flex justify-between items-start flex-wrap gap-2">
+                                <div>
+                                  <h4 className="font-bold text-gray-900 text-base">{b.name}</h4>
+                                  <div className="text-xs text-gray-500 mt-1">{b.email} • {b.phone}</div>
+                                </div>
+                                <div className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-right">
+                                  <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Requested Discount</div>
+                                  <div className="font-bold text-amber-900 mt-0.5">
+                                    {b.discountRequest?.type === 'percentage' ? `${b.discountRequest.value}%` : `£${b.discountRequest?.value}`}
+                                    <span className="text-sm font-medium ml-1">(-£{discountReqVal.toLocaleString()})</span>
+                                  </div>
+                                  <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2">
+                                <div>
+                                  <div className="text-xs text-gray-400 mb-0.5">Event Type</div>
+                                  <div className="text-sm font-medium text-gray-800">{b.eventType}</div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-400 mb-0.5">Guests</div>
+                                  <div className="text-sm font-medium text-gray-800">{b.guests}</div>
+                                </div>
+                              </div>
+                              
+                              <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-500 font-medium">Total (Base + Extras)</span>
+                                  <span className="font-semibold text-gray-900">£{totalBeforeDiscount.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-amber-600 font-medium">Requested Discount</span>
+                                  <span className="font-bold text-amber-700">-£{discountReqVal.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-emerald-600 font-medium">Deposit Paid</span>
+                                  <span className="font-semibold text-emerald-700">-£{b.deposit.toLocaleString()}</span>
+                                </div>
+                                <div className="border-t border-gray-200 pt-2 flex justify-between items-center mt-1">
+                                  <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">Final Pending Amount <span className="text-[10px] text-gray-400 font-normal normal-case ml-1">(If Approved)</span></span>
+                                  <span className="font-bold text-lg text-indigo-700">£{(totalBeforeDiscount - discountReqVal - b.deposit).toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col items-center gap-3 w-full lg:w-48 flex-shrink-0">
+                              {/* Deposit Proof */}
+                              {b.paymentProofDeposit ? (
+                                <div className="w-full text-center">
+                                  <div className="text-xs font-semibold text-gray-500 mb-1.5">Advance Payment</div>
+                                  <div 
+                                    className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
+                                    onClick={() => {
+                                      if (b.paymentProofDeposit?.startsWith('data:image')) {
+                                        const w = window.open('');
+                                        w?.document.write(`<img src="${b.paymentProofDeposit}" style="max-width: 100%; height: auto;"/>`);
+                                      } else {
+                                        window.open(b.paymentProofDeposit, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    <img src={b.paymentProofDeposit} alt="Deposit Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Icon name="MagnifyingGlassPlusIcon" size={20} className="text-white" />
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="w-full h-24 bg-gray-50 border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400">
+                                  <Icon name="PhotoIcon" size={20} className="mb-1" />
+                                  <span className="text-[10px] font-medium">No Deposit Photo</span>
+                                </div>
+                              )}
+                              
+                              <div className="flex gap-2 w-full mt-auto">
+                                <button onClick={() => handleDiscountApproval(b.id, false)} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
+                                  <Icon name="XMarkIcon" size={14} /> Reject
+                                </button>
+                                <button onClick={() => handleDiscountApproval(b.id, true)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-xs transition-colors shadow-sm flex items-center justify-center gap-1">
+                                  <Icon name="CheckIcon" size={14} /> Approve
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  bookings.filter(b => b.discountRequest && b.discountRequest.status !== 'pending').length === 0 ? (
+                    <div className="text-center py-12 text-gray-400 text-sm">
+                      <Icon name="ClockIcon" size={36} className="mx-auto mb-3 text-gray-300" />
+                      No discount history
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {bookings.filter(b => b.discountRequest && b.discountRequest.status !== 'pending').map(b => {
+                        const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                          ? (totalBeforeDiscount * (b.discountRequest.value / 100))
+                          : (b.discountRequest?.value || 0);
+
+                        return (
+                          <div key={b.id} className={`border border-gray-200 rounded-xl p-5 bg-white flex flex-col gap-4 shadow-sm opacity-90 ${b.discountRequest?.status === 'rejected' ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-emerald-500'}`}>
                             <div className="flex justify-between items-start flex-wrap gap-2">
                               <div>
                                 <h4 className="font-bold text-gray-900 text-base">{b.name}</h4>
                                 <div className="text-xs text-gray-500 mt-1">{b.email} • {b.phone}</div>
                               </div>
-                              <div className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg text-right">
-                                <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Requested Discount</div>
-                                <div className="font-bold text-amber-900 mt-0.5">
+                              <div className={`border px-3 py-1.5 rounded-lg text-right ${b.discountRequest?.status === 'approved' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                                <div className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-1 justify-end ${b.discountRequest?.status === 'approved' ? 'text-emerald-700' : 'text-red-700'}`}>
+                                  <Icon name={b.discountRequest?.status === 'approved' ? 'CheckCircleIcon' : 'XCircleIcon'} size={14} />
+                                  {b.discountRequest?.status === 'approved' ? 'Approved' : 'Rejected'} Discount
+                                </div>
+                                <div className={`font-bold mt-0.5 ${b.discountRequest?.status === 'approved' ? 'text-emerald-900' : 'text-red-900'}`}>
                                   {b.discountRequest?.type === 'percentage' ? `${b.discountRequest.value}%` : `£${b.discountRequest?.value}`}
                                   <span className="text-sm font-medium ml-1">(-£{discountReqVal.toLocaleString()})</span>
                                 </div>
@@ -2526,79 +2680,16 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                               </div>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2">
-                              <div>
-                                <div className="text-xs text-gray-400 mb-0.5">Event Type</div>
-                                <div className="text-sm font-medium text-gray-800">{b.eventType}</div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-400 mb-0.5">Guests</div>
-                                <div className="text-sm font-medium text-gray-800">{b.guests}</div>
-                              </div>
-                            </div>
-                            
-                            <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-500 font-medium">Total (Base + Extras)</span>
-                                <span className="font-semibold text-gray-900">£{totalBeforeDiscount.toLocaleString()}</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-amber-600 font-medium">Requested Discount</span>
-                                <span className="font-bold text-amber-700">-£{discountReqVal.toLocaleString()}</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-emerald-600 font-medium">Deposit Paid</span>
-                                <span className="font-semibold text-emerald-700">-£{b.deposit.toLocaleString()}</span>
-                              </div>
-                              <div className="border-t border-gray-200 pt-2 flex justify-between items-center mt-1">
-                                <span className="font-bold text-gray-900 text-xs uppercase tracking-wide">Final Pending Amount <span className="text-[10px] text-gray-400 font-normal normal-case ml-1">(If Approved)</span></span>
-                                <span className="font-bold text-lg text-indigo-700">£{(totalBeforeDiscount - discountReqVal - b.deposit).toLocaleString()}</span>
-                              </div>
+                            <div className="flex items-center gap-6 text-sm text-gray-600 border-t border-gray-100 pt-3">
+                              <div><span className="text-gray-400 mr-1">Event Type:</span> {b.eventType}</div>
+                              <div><span className="text-gray-400 mr-1">Guests:</span> {b.guests}</div>
+                              <div><span className="text-gray-400 mr-1">Total Amount:</span> £{totalBeforeDiscount.toLocaleString()}</div>
                             </div>
                           </div>
-                          
-                          <div className="flex flex-col items-center gap-3 w-full lg:w-48 flex-shrink-0">
-                            {/* Deposit Proof */}
-                            {b.paymentProofDeposit ? (
-                              <div className="w-full text-center">
-                                <div className="text-xs font-semibold text-gray-500 mb-1.5">Advance Payment</div>
-                                <div 
-                                  className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
-                                  onClick={() => {
-                                    if (b.paymentProofDeposit?.startsWith('data:image')) {
-                                      const w = window.open('');
-                                      w?.document.write(`<img src="${b.paymentProofDeposit}" style="max-width: 100%; height: auto;"/>`);
-                                    } else {
-                                      window.open(b.paymentProofDeposit, '_blank');
-                                    }
-                                  }}
-                                >
-                                  <img src={b.paymentProofDeposit} alt="Deposit Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <Icon name="MagnifyingGlassPlusIcon" size={20} className="text-white" />
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-full h-24 bg-gray-50 border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400">
-                                <Icon name="PhotoIcon" size={20} className="mb-1" />
-                                <span className="text-[10px] font-medium">No Deposit Photo</span>
-                              </div>
-                            )}
-                            
-                            <div className="flex gap-2 w-full mt-auto">
-                              <button onClick={() => handleDiscountApproval(b.id, false)} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
-                                <Icon name="XMarkIcon" size={14} /> Reject
-                              </button>
-                              <button onClick={() => handleDiscountApproval(b.id, true)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-xs transition-colors shadow-sm flex items-center justify-center gap-1">
-                                <Icon name="CheckIcon" size={14} /> Approve
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -3513,6 +3604,12 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                     <span className="text-gray-600">Total Amount</span>
                     <span className="font-semibold text-gray-900">£{getTotalAmount(selectedBooking).toLocaleString()}</span>
                   </div>
+                  {selectedBooking.discount && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Discount</span>
+                      <span className="font-semibold text-red-600">-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Deposit</span>
                     <span className={`font-semibold ${selectedBooking.depositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
