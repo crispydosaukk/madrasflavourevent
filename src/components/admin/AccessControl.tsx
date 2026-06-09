@@ -52,7 +52,8 @@ export default function AccessControl() {
           'manage_menus',
           'manage_history',
           'manage_settings',
-          'manage_access'
+          'manage_access',
+          'manage_tracker'
         ];
         for (const p of DEFAULT_PERMISSIONS) {
           if (!existing.includes(p)) {

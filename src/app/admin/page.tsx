@@ -243,7 +243,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals';
+type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -258,6 +258,8 @@ export default function AdminPage() {
   const [isEditingGuests, setIsEditingGuests] = useState(false);
   const [isEditingDueDate, setIsEditingDueDate] = useState(false);
   const [discountTab, setDiscountTab] = useState<'pending' | 'history'>('pending');
+  const [trackingBookingId, setTrackingBookingId] = useState<string>('');
+  const [trackerSearch, setTrackerSearch] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1467,6 +1469,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     { id: 'discount_approvals', label: 'Discount Approvals', icon: 'TagIcon', badge: pendingDiscounts.length || undefined, requiredPerm: 'manage_discounts' },
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
     { id: 'access', label: 'Access Control', icon: 'ShieldCheckIcon', requiredPerm: 'manage_access' },
+    { id: 'tracker', label: 'Booking Tracker', icon: 'MapIcon', requiredPerm: 'manage_tracker' },
   ];
 
   const visibleNavItems = navItems.filter(item => {
@@ -1611,6 +1614,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 {activeTab === 'menus' && 'Manage catering packages'}
                 {activeTab === 'history' && `${completedBookings.length} completed bookings`}
                 {activeTab === 'settings' && 'Venue configuration'}
+                {activeTab === 'access' && 'Manage roles and permissions'}
+                {activeTab === 'discount_approvals' && 'Review discount requests'}
+                {activeTab === 'tracker' && 'Track booking progress step-by-step'}
               </p>
             </div>
           </div>
@@ -3003,6 +3009,226 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           )}
           {activeTab === 'access' && (
             <AccessControl />
+          )}
+
+          {/* ─── BOOKING TRACKER ─── */}
+          {activeTab === 'tracker' && (
+            <div className="space-y-6 max-w-4xl mx-auto">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <Icon name="MapIcon" size={24} style={{ color: '#C8860A' }} />
+                    Booking Timeline Tracker
+                  </h3>
+                  {trackingBookingId && (
+                    <button 
+                      onClick={() => { setTrackingBookingId(''); setTrackerSearch(''); }}
+                      className="text-sm font-semibold text-gray-600 hover:text-gray-900 flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      <Icon name="ArrowLeftIcon" size={16} /> Back to all orders
+                    </button>
+                  )}
+                </div>
+                
+                {!trackingBookingId ? (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="relative">
+                      <Icon name="MagnifyingGlassIcon" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text"
+                        placeholder="Search orders by name, email, phone number, or event type..."
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] transition-shadow shadow-sm"
+                        value={trackerSearch}
+                        onChange={(e) => setTrackerSearch(e.target.value)}
+                      />
+                      {trackerSearch && (
+                        <button 
+                          onClick={() => setTrackerSearch('')}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                        >
+                          <Icon name="XMarkIcon" size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden max-h-[600px] overflow-y-auto">
+                      {(() => {
+                        const filtered = bookings.filter(b => 
+                          b.name.toLowerCase().includes(trackerSearch.toLowerCase()) || 
+                          b.email.toLowerCase().includes(trackerSearch.toLowerCase()) ||
+                          b.phone.toLowerCase().includes(trackerSearch.toLowerCase()) ||
+                          b.eventType.toLowerCase().includes(trackerSearch.toLowerCase())
+                        );
+
+                        return filtered.length > 0 ? filtered.map(b => (
+                          <div 
+                            key={b.id}
+                            onClick={() => {
+                              setTrackingBookingId(b.id);
+                              setTrackerSearch('');
+                            }}
+                            className="px-5 py-4 hover:bg-[#C8860A]/5 cursor-pointer border-b border-gray-50 last:border-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors group"
+                          >
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-700 font-bold text-lg border border-amber-100">
+                                {b.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900 text-sm group-hover:text-[#C8860A] transition-colors">{b.name}</div>
+                                <div className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="flex items-center gap-1"><Icon name="EnvelopeIcon" size={12} /> {b.email}</span>
+                                  <span className="hidden sm:inline text-gray-300">•</span>
+                                  <span className="flex items-center gap-1"><Icon name="PhoneIcon" size={12} /> {b.phone}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-left sm:text-right flex flex-col sm:items-end ml-14 sm:ml-0">
+                              <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border mb-1.5 shadow-sm ${STATUS_COLORS[b.status]}`}>
+                                {STATUS_LABELS[b.status]}
+                              </span>
+                              <div className="text-xs font-medium text-gray-700">{b.eventType}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">{b.date}</div>
+                            </div>
+                          </div>
+                        )) : (
+                          <div className="p-12 text-center text-gray-500">
+                            <Icon name="InboxIcon" size={32} className="mx-auto mb-3 text-gray-300" />
+                            <div className="text-sm font-medium text-gray-900 mb-1">No orders found</div>
+                            <div className="text-xs text-gray-500">Try adjusting your search terms</div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                ) : (() => {
+                  const tb = bookings.find(x => x.id === trackingBookingId);
+                  if (!tb) return <div className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center">Booking not found.</div>;
+                  
+                  const currentStepIdx = STATUS_FLOW.indexOf(tb.status);
+                  
+                  return (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex items-center justify-between shadow-sm">
+                        <div>
+                          <div className="font-bold text-gray-900 text-lg">{tb.name}</div>
+                          <div className="text-sm font-medium text-gray-500 mt-1 flex items-center gap-2">
+                            <Icon name="CalendarIcon" size={14} /> {tb.eventType} on {tb.date}
+                          </div>
+                        </div>
+                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide border shadow-sm ${STATUS_COLORS[tb.status]}`}>
+                          {STATUS_LABELS[tb.status]}
+                        </span>
+                      </div>
+                      
+                      <div className="relative border-l-2 border-gray-200 ml-5 pl-8 space-y-8 mt-8 pb-4">
+                        {STATUS_FLOW.map((step, idx) => {
+                          const isCompleted = idx < currentStepIdx;
+                          const isCurrent = idx === currentStepIdx;
+                          const isPastOrCurrent = idx <= currentStepIdx;
+                          
+                          return (
+                            <div key={step} className="relative">
+                              {/* Timeline dot */}
+                              <div className={`absolute -left-[41px] top-1 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${isCompleted ? 'bg-emerald-500 border-emerald-500 shadow-md scale-110' : isCurrent ? 'bg-amber-500 border-amber-500 shadow-md ring-4 ring-amber-100 scale-125' : 'bg-white border-gray-300'}`}>
+                                {isCompleted && <Icon name="CheckIcon" size={12} className="text-white" />}
+                                {isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+                              </div>
+                              
+                              <div className={`font-bold text-sm ${isPastOrCurrent ? 'text-gray-900' : 'text-gray-400'}`}>
+                                Step {idx + 1}: {STATUS_LABELS[step]}
+                              </div>
+                              
+                              {/* Details if reached this step */}
+                              {isPastOrCurrent && (
+                                <div className="mt-2.5 text-sm text-gray-600 bg-white border border-gray-100 shadow-sm rounded-xl p-4">
+                                  {step === 'new_enquiry' && <div className="flex items-center gap-2"><Icon name="InboxIcon" size={16} className="text-gray-400" /> Enquiry received on <span className="font-semibold text-gray-800">{tb.enquiryDate || 'N/A'}</span>.</div>}
+                                  
+                                  {step === 'menu_sent' && <div className="flex items-center gap-2"><Icon name="DocumentTextIcon" size={16} className="text-blue-500" /> Menu options sent to customer.</div>}
+                                  
+                                  {step === 'menu_selected' && <div className="flex items-center gap-2"><Icon name="ListBulletIcon" size={16} className="text-amber-500" /> Selected Menu: <span className="font-semibold text-gray-800">{tb.selectedMenu || tb.package}</span></div>}
+                                  
+                                  {step === 'deposit_pending' && <div className="flex items-center gap-2"><Icon name="ClockIcon" size={16} className="text-amber-600" /> Deposit requested: <span className="font-semibold text-gray-800">£{tb.deposit.toLocaleString()}</span></div>}
+                                  
+                                  {step === 'deposit_confirmed' && (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Deposit fully received.</div>
+                                      {tb.paymentProofDeposit && (
+                                        <div className="group relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm" onClick={() => {
+                                          if (tb.paymentProofDeposit?.startsWith('data:image')) {
+                                            const w = window.open('');
+                                            w?.document.write(`<img src="${tb.paymentProofDeposit}" style="max-width: 100%; height: auto;"/>`);
+                                          } else {
+                                            window.open(tb.paymentProofDeposit, '_blank');
+                                          }
+                                        }}>
+                                          <img src={tb.paymentProofDeposit} alt="Deposit Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><Icon name="MagnifyingGlassPlusIcon" size={20} /></div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {step === 'final_invoice_sent' && <div className="flex items-center gap-2"><Icon name="DocumentArrowUpIcon" size={16} className="text-blue-500" /> Final invoice sent. Balance Due: <span className="font-bold text-gray-900">£{(getTotalAmount(tb) - tb.deposit).toLocaleString()}</span></div>}
+                                  
+                                  {step === 'final_payment_received' && (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Final Payment fully received.</div>
+                                      {tb.paymentProofFinal && (
+                                        <div className="group relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm" onClick={() => {
+                                          if (tb.paymentProofFinal?.startsWith('data:image')) {
+                                            const w = window.open('');
+                                            w?.document.write(`<img src="${tb.paymentProofFinal}" style="max-width: 100%; height: auto;"/>`);
+                                          } else {
+                                            window.open(tb.paymentProofFinal, '_blank');
+                                          }
+                                        }}>
+                                          <img src={tb.paymentProofFinal} alt="Final Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><Icon name="MagnifyingGlassPlusIcon" size={20} /></div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {step === 'event_scheduled' && <div className="flex items-center gap-2"><Icon name="CalendarDaysIcon" size={16} className="text-indigo-500" /> Event scheduled for <span className="font-semibold text-gray-800">{tb.date} at {tb.time}</span>.</div>}
+                                  
+                                  {step === 'event_completed' && (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center gap-2"><Icon name="FlagIcon" size={16} className="text-amber-500" /> Event has concluded.</div>
+                                      {tb.paymentProofExtra && (
+                                        <div className="pt-2 mt-2 border-t border-gray-100">
+                                          <div className="mb-2 text-emerald-600 font-semibold flex items-center gap-1.5"><Icon name="BanknotesIcon" size={16} /> Extra Charges Paid</div>
+                                          <div className="group relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm" onClick={() => {
+                                            if (tb.paymentProofExtra?.startsWith('data:image')) {
+                                              const w = window.open('');
+                                              w?.document.write(`<img src="${tb.paymentProofExtra}" style="max-width: 100%; height: auto;"/>`);
+                                            } else {
+                                              window.open(tb.paymentProofExtra, '_blank');
+                                            }
+                                          }}>
+                                            <img src={tb.paymentProofExtra} alt="Extra Proof" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"><Icon name="MagnifyingGlassPlusIcon" size={20} /></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  
+                                  {step === 'completed' && (
+                                    <div className="flex items-center gap-2 text-emerald-700 font-bold bg-emerald-50 px-4 py-2.5 rounded-lg border border-emerald-100">
+                                      <Icon name="CheckBadgeIcon" size={20} /> Booking Successfully Closed
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           )}
 
         </div>
