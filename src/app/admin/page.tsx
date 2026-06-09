@@ -42,17 +42,22 @@ interface Booking {
   date: string;
   time: string;
   guests: number;
+  adults?: number;
+  kids4to10?: number;
+  kidsUnder4?: number;
   status: BookingStatus;
   notes: string;
   baseAmount: number;
   deposit: number;
   depositPaid: boolean;
   finalPaymentPaid: boolean;
+  dueDate?: string;
   package: string;
   selectedMenu?: string;
   extraCharges: ExtraCharge[];
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
+  paymentProofExtra?: string;
   discount?: Discount;
   discountRequest?: DiscountRequest;
   enquiryDate: string;
@@ -79,10 +84,10 @@ const STATUS_FLOW: BookingStatus[] = [
   'menu_selected',
   'deposit_pending',
   'deposit_confirmed',
-  'event_scheduled',
-  'event_completed',
   'final_invoice_sent',
   'final_payment_received',
+  'event_scheduled',
+  'event_completed',
   'completed',
 ];
 
@@ -251,6 +256,7 @@ export default function AdminPage() {
   const [isEditingPackage, setIsEditingPackage] = useState(false);
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [isEditingGuests, setIsEditingGuests] = useState(false);
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false);
   const [discountTab, setDiscountTab] = useState<'pending' | 'history'>('pending');
 
   useEffect(() => {
@@ -280,6 +286,9 @@ export default function AdminPage() {
           date: data.date || 'N/A',
           time: data.timeOfDay || 'N/A',
           guests: data.guests || 0,
+          adults: data.adults ?? undefined,
+          kids4to10: data.kids4to10 ?? 0,
+          kidsUnder4: data.kidsUnder4 ?? 0,
           status: data.status || 'new_enquiry',
           notes: data.message || '',
           baseAmount: data.baseAmount || 0,
@@ -294,6 +303,16 @@ export default function AdminPage() {
           discount: data.discount,
           discountRequest: data.discountRequest,
           enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          dueDate: (() => {
+            if (data.dueDate) return data.dueDate;
+            if (data.date && data.date !== 'N/A') {
+              const evDate = new Date(data.date);
+              const today = new Date();
+              evDate.setDate(evDate.getDate() - 14);
+              return (evDate < today ? today : evDate).toISOString().split('T')[0];
+            }
+            return '';
+          })(),
           updatedAt: data.updatedAt,
           createdAt: data.createdAt,
         } as Booking;
@@ -381,8 +400,10 @@ export default function AdminPage() {
   const [showMenuPanel, setShowMenuPanel] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
   const [customAlert, setCustomAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [bookingToDelete, setBookingToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isUploadingFinalProof, setIsUploadingFinalProof] = useState(false);
+  const [isUploadingExtraProof, setIsUploadingExtraProof] = useState(false);
 
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [blockDateInput, setBlockDateInput] = useState('');
@@ -619,20 +640,51 @@ export default function AdminPage() {
       text += `🍛 *Vegetarian Mains:*\n${(editableSLMenu.vegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
       text += `🍖 *Non-Veg Mains:*\n${(editableSLMenu.nonVegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
       text += `🍮 *Desserts:*\n${(editableSLMenu.desserts || []).map(i => `• ${i}`).join('\n')}\n\n`;
+    } else if (menuType === 'Venue Hall Charges') {
+      text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
+      text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
+    } else if (menuType === 'Dry Hire') {
+      text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
+    } else if (menuType === 'Kids Pricing') {
+      text += `(Only Applies for over 50 Adults)\n\n`;
+      text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
+      text += `*NOTE:* Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.\n\n`;
     }
-    text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
+    
+    if (menuType.includes('Menu')) {
+      text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
+    } else {
+      text += `Please let us know if you have any questions or would like to proceed with booking! 🙏`;
+    }
     return buildWhatsAppLink(customerPhone, text);
   };
 
   const buildCompletedWhatsAppText = (booking: Booking) => {
     const total = getTotalAmount(booking).toLocaleString();
     const deposit = booking.deposit.toLocaleString();
-    const balance = (getTotalAmount(booking) - booking.deposit).toLocaleString();
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const finalPaymentPaidAmt = getTotalAmount(booking) - booking.deposit - extraChargesTotal;
 
     let discountText = '';
     if (booking.discount) {
       discountText = `\n• Discount (${booking.discount.reason}): -£${getDiscountAmount(booking).toLocaleString()}`;
     }
+
+    const hallCharge = getVenueHallCharge(booking.date, booking.time);
+    const hallText = hallCharge ? `\n• ${hallCharge.label}: £${hallCharge.amount.toLocaleString()}` : '';
+
+    let extrasText = '';
+    if (extraChargesTotal > 0) {
+      extrasText = '\n\n*➕ Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
+    }
+
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+    const guestBreakdown = `• Adults: ${adults} × £${editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0}/person\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person\n• Kids (0-4 yrs): ${kidsUnder4} × Free`;
 
     return `Hi ${booking.name.split(' ')[0]},
 
@@ -641,13 +693,20 @@ Thank you so much for booking with Honeymoon Events! 🎊 Your event was a succe
 *📝 Event Summary:*
 • Event: ${booking.eventType}
 • Date: ${booking.date}
-• Guests: ${booking.guests}
+• Package: ${booking.selectedMenu || booking.package}
+
+*👥 Guest Breakdown:*
+${guestBreakdown}
+• Total Guests: ${adults + kids4to10 + kidsUnder4}${extrasText}
 
 *💰 Final Invoice Details:*
-• Base & Extras: £${(booking.baseAmount + (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0)).toLocaleString()}${discountText}
-• Total Amount: £${total}
-• Deposit Paid: £${deposit}
-• Final Balance Paid: £${balance}
+• Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}${hallText}
+• Grand Total: £${total}
+
+*💳 Payments Received:*
+• Deposit: £${deposit}
+• Main Balance Paid: £${finalPaymentPaidAmt.toLocaleString()}
+${extraChargesTotal > 0 ? `• Extra Charges Paid: £${extraChargesTotal.toLocaleString()}\n` : ''}
 • Status: *Paid in Full ✅*
 
 It was an absolute pleasure serving you. We hope you and your guests had a wonderful time! We'd love to host your future events. 🙏✨`;
@@ -664,7 +723,43 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       discountText = `\n\n*🏷️ Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n*✅ Deposit Paid:* -£${booking.deposit.toLocaleString()}\n\n*⚖️ Balance Due: £${(getTotalAmount(booking) - booking.deposit).toLocaleString()}*\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    const hallCharge = getVenueHallCharge(booking.date, booking.time);
+    const hallText = hallCharge ? `\n\n*🏛️ ${hallCharge.label}:* £${hallCharge.amount.toLocaleString()}` : '';
+
+    const dueDateText = booking.dueDate ? `\n\n*⏰ Payment Due By:* ${booking.dueDate}` : '';
+
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+
+    const guestBreakdown = `*👥 Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
+
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n*✅ Deposit Paid:* -£${booking.deposit.toLocaleString()}\n\n*⚖️ Balance Due: £${(getTotalAmount(booking) - booking.deposit).toLocaleString()}*${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+  };
+
+  const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
+    const extraChargesTotal = booking.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
+    const extrasList = booking.extraCharges?.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n') || '';
+
+    return `Hi ${booking.name.split(' ')[0]},
+
+Thank you for celebrating with us at Honeymoon Events! 🎉 We hope you had a fantastic time.
+
+There were some additional adjustments/services added during your event:
+${extrasList}
+
+*💰 Extra Balance Due: £${extraChargesTotal.toLocaleString()}*
+
+Please transfer this outstanding balance to:
+🏦 Account Name: ${bank.accountName}
+📋 Sort Code: ${bank.sortCode}
+🔢 Account No: ${bank.accountNumber}
+📌 Reference: ${booking.id} (Extras)
+
+Once paid, please send a screenshot of the transfer confirmation here so we can finalize and close your booking. Thank you! 🙏`;
   };
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -887,17 +982,86 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     }
   };
 
-  const confirmFinalPayment = async (id: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'completed' } : b));
-    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'completed' } : prev);
+  const handleUploadExtraProof = async (id: string, file: File) => {
+    setIsUploadingExtraProof(true);
     try {
-      await setDoc(doc(db, 'booking_requests', id), { finalPaymentPaid: true, status: 'completed' }, { merge: true });
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      await new Promise((resolve, reject) => {
+        reader.onload = resolve;
+        reader.onerror = reject;
+      });
+
+      const img = new window.Image();
+      img.src = reader.result as string;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 800;
+      const MAX_HEIGHT = 800;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width *= MAX_HEIGHT / height;
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+
+      const base64String = canvas.toDataURL('image/jpeg', 0.7);
+
+      setBookings(prev => prev.map(b => b.id === id ? { ...b, paymentProofExtra: base64String } : b));
+      setSelectedBooking(prev => prev?.id === id ? { ...prev, paymentProofExtra: base64String } : prev);
+
+      await setDoc(doc(db, 'booking_requests', id), { paymentProofExtra: base64String }, { merge: true });
+      const currentBooking = bookings.find(b => b.id === id);
+      if (currentBooking) {
+        const bookingData = {
+          ...currentBooking,
+          paymentProofExtra: base64String,
+          updatedAt: new Date().toISOString()
+        };
+
+        const cleanBookingData = Object.fromEntries(
+          Object.entries(bookingData).filter(([_, v]) => v !== undefined)
+        );
+
+        await setDoc(doc(db, 'bookings', id), cleanBookingData, { merge: true });
+      }
+      setCustomAlert({ message: 'Extra payment proof uploaded successfully!', type: 'success' });
+    } catch (error: any) {
+      console.error('Error uploading extra payment proof:', error);
+      setCustomAlert({ message: `Error uploading extra payment proof: ${error.message || 'Unknown error'}`, type: 'error' });
+    } finally {
+      setIsUploadingExtraProof(false);
+    }
+  };
+
+  const confirmFinalPayment = async (id: string) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received' } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received' } : prev);
+    try {
+      await setDoc(doc(db, 'booking_requests', id), { finalPaymentPaid: true, status: 'final_payment_received' }, { merge: true });
       const currentBooking = bookings.find(b => b.id === id);
       if (currentBooking) {
         const bookingData = {
           ...currentBooking,
           finalPaymentPaid: true,
-          status: 'completed',
+          status: 'final_payment_received',
           updatedAt: new Date().toISOString()
         };
         const cleanBookingData = Object.fromEntries(
@@ -907,6 +1071,28 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       }
     } catch (error) {
       console.error('Error confirming final payment in database:', error);
+    }
+  };
+
+  const handleDeleteBooking = (id: string, name: string) => {
+    setBookingToDelete({ id, name });
+  };
+
+  const confirmDeleteBooking = async () => {
+    if (!bookingToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'booking_requests', bookingToDelete.id));
+      await deleteDoc(doc(db, 'bookings', bookingToDelete.id));
+      setBookings(prev => prev.filter(b => b.id !== bookingToDelete.id));
+      if (selectedBooking?.id === bookingToDelete.id) {
+        setSelectedBooking(null);
+      }
+      setCustomAlert({ message: 'Booking deleted successfully', type: 'success' });
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      setCustomAlert({ message: 'Error deleting booking. Please try again.', type: 'error' });
+    } finally {
+      setBookingToDelete(null);
     }
   };
 
@@ -1147,9 +1333,42 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     return b.discount.value;
   };
 
-  const getTotalAmount = (b: Booking) => {
+  const getVenueHallCharge = (date: string, time: string): { label: string; amount: number } | null => {
+    if (!date || date === 'N/A') return null;
+    const d = new Date(date);
+    const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const timeLower = (time || '').toLowerCase();
+    const isDinner = timeLower.includes('dinner') || timeLower.includes('evening') || timeLower.includes('pm');
+
+    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+      // Mon–Thu: £100
+      return { label: 'Venue Hall Hire (Mon–Thu)', amount: 100 };
+    } else if (dayOfWeek === 5) {
+      // Friday: £250
+      return { label: 'Venue Hall Hire (Friday)', amount: 250 };
+    } else if (dayOfWeek === 0) {
+      // Sunday: £250
+      return { label: 'Venue Hall Hire (Sunday)', amount: 250 };
+    } else if (dayOfWeek === 6) {
+      // Saturday: Lunch=£250, Dinner=£500
+      if (isDinner) {
+        return { label: 'Venue Hall Hire (Saturday Dinner)', amount: 500 };
+      } else {
+        return { label: 'Venue Hall Hire (Saturday Lunch)', amount: 250 };
+      }
+    }
+    return null;
+  };
+
+  const getFoodPackageTotal = (b: Booking) => {
     const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     return subtotal - getDiscountAmount(b);
+  };
+
+  const getTotalAmount = (b: Booking) => {
+    const food = getFoodPackageTotal(b);
+    const hall = getVenueHallCharge(b.date, b.time);
+    return food + (hall?.amount || 0);
   };
 
   const enquiries = bookings.filter(b => b.status === 'new_enquiry');
@@ -1683,9 +1902,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             </a>
                           </td>
                           <td className="px-4 py-3.5">
-                            <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline" style={{ color: '#C8860A' }}>
-                              Manage <Icon name="ChevronRightIcon" size={12} />
-                            </button>
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#C8860A' }}>
+                                Manage <Icon name="ChevronRightIcon" size={12} />
+                              </button>
+                              <button onClick={() => handleDeleteBooking(booking.id, booking.name)} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Delete Booking">
+                                <Icon name="TrashIcon" size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -2083,7 +2307,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             <div className="flex flex-wrap gap-2">
                               {enquiries.concat(activeBookings).slice(0, 4).map((b) => (
                                 <a key={b.id}
-                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
+                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
                                   target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                   style={{ background: '#25D366', color: 'white' }}>
@@ -2353,10 +2577,15 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                         <div className="text-xs text-gray-400">{b.email} · {b.phone}</div>
                       </div>
                     </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[b.status]}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[b.status]}`} />
-                      {STATUS_LABELS[b.status]}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[b.status]}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[b.status]}`} />
+                        {STATUS_LABELS[b.status]}
+                      </span>
+                      <button onClick={() => handleDeleteBooking(b.id, b.name)} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors" title="Delete History Record">
+                        <Icon name="TrashIcon" size={14} />
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                     {[
@@ -2387,7 +2616,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   </div>
 
                   {/* Payment proofs */}
-                  {(b.paymentProofDeposit || b.paymentProofFinal) && (
+                  {(b.paymentProofDeposit || b.paymentProofFinal || b.paymentProofExtra) && (
                     <div className="border-t border-gray-100 pt-4 mt-4">
                       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Payment Proofs</div>
                       <div className="flex gap-3">
@@ -2429,6 +2658,26 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                               <Icon name="MagnifyingGlassPlusIcon" size={16} className="text-white" />
                             </div>
                             <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center py-0.5">Final</div>
+                          </div>
+                        )}
+                        {b.paymentProofExtra && (
+                          <div
+                            className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group bg-gray-50 flex-shrink-0"
+                            onClick={() => {
+                              if (b.paymentProofExtra?.startsWith('data:image')) {
+                                const w = window.open('');
+                                w?.document.write(`<img src="${b.paymentProofExtra}" style="max-width: 100%; height: auto;"/>`);
+                              } else {
+                                window.open(b.paymentProofExtra, '_blank');
+                              }
+                            }}
+                            title="View Extra Proof"
+                          >
+                            <img src={b.paymentProofExtra} alt="Extra" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Icon name="MagnifyingGlassPlusIcon" size={16} className="text-white" />
+                            </div>
+                            <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] text-center py-0.5">Extra</div>
                           </div>
                         )}
                       </div>
@@ -2499,10 +2748,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   </h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <label className="text-sm text-gray-600">Deposit Percentage</label>
+                      <label className="text-sm text-gray-600">Deposit Amount</label>
                       <div className="flex items-center gap-1">
+                        <span className="text-gray-500 text-sm">£</span>
                         <input type="number" value={pricingDetails.depositPercentage} onChange={e => setPricingDetails(p => ({ ...p, depositPercentage: Number(e.target.value) }))} className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none bg-gray-50" />
-                        <span className="text-gray-500 text-sm">%</span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
@@ -2826,7 +3075,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Event Type</span>
-                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                      {!selectedBooking.depositPaid && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
                         <button
                           onClick={() => setIsEditingEventType(true)}
                           className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
@@ -2880,7 +3129,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Package</span>
-                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                      {!selectedBooking.depositPaid && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
                         <button
                           onClick={() => setIsEditingPackage(true)}
                           className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
@@ -2937,7 +3186,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Date</span>
-                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                      {!selectedBooking.depositPaid && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
                         <button
                           onClick={() => setIsEditingBookingDate(true)}
                           className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
@@ -2989,7 +3238,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Time / Shift</span>
-                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                      {!selectedBooking.depositPaid && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
                         <button
                           onClick={() => setIsEditingTime(true)}
                           className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
@@ -3041,7 +3290,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center justify-between">
                       <span>Guests</span>
-                      {!['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                      {!selectedBooking.depositPaid && !(selectedBooking.selectedMenu || selectedBooking.package) && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
                         <button
                           onClick={() => setIsEditingGuests(true)}
                           className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
@@ -3081,7 +3330,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             const found = editableBanquetPackages.find(p => p.name === currentPkg);
                             if (found) {
                               baseAmount = found.pricePerPerson * val;
-                              deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
+                              deposit = pricingDetails.depositPercentage;
                             }
                           }
 
@@ -3105,6 +3354,60 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Enquiry Date</div>
                   <div className="text-sm font-medium text-gray-900">{selectedBooking.enquiryDate}</div>
                 </div>
+
+                {['deposit_confirmed', 'event_scheduled', 'event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                  !isEditingDueDate ? (
+                    <div className="bg-gray-50 rounded-xl p-3 flex flex-col justify-between border border-amber-100">
+                      <div className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1 flex items-center justify-between">
+                        <span>Payment Due Date</span>
+                        {!selectedBooking.depositPaid && !['event_completed', 'final_invoice_sent', 'final_payment_received', 'completed'].includes(selectedBooking.status) && (
+                          <button
+                            onClick={() => setIsEditingDueDate(true)}
+                            className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold transition-colors flex items-center gap-0.5"
+                          >
+                            <Icon name="PencilIcon" size={10} />
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-sm font-bold text-amber-900">
+                        {selectedBooking.dueDate ? selectedBooking.dueDate : 'Not Set'}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 rounded-xl p-3 flex flex-col justify-between border border-amber-400">
+                      <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1 flex items-center justify-between">
+                        <span>Payment Due Date</span>
+                        <button
+                          onClick={() => setIsEditingDueDate(false)}
+                          className="text-[10px] text-gray-500 hover:text-gray-700 font-medium transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <input
+                        type="date"
+                        defaultValue={selectedBooking.dueDate || ''}
+                        onChange={async (e) => {
+                          const newDate = e.target.value;
+                          if (!newDate) return;
+                          try {
+                            const updatedBooking = { ...selectedBooking, dueDate: newDate };
+                            setSelectedBooking(updatedBooking);
+                            setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, dueDate: newDate } : b));
+
+                            await setDoc(doc(db, 'booking_requests', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                            await setDoc(doc(db, 'bookings', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                            setIsEditingDueDate(false);
+                          } catch (error) {
+                            console.error('Error updating due date:', error);
+                          }
+                        }}
+                        className="w-full border border-amber-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold text-amber-900 mt-1"
+                      />
+                    </div>
+                  )
+                )}
               </div>
 
               {/* ── STEP-SPECIFIC PANELS ── */}
@@ -3141,8 +3444,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                             }
                           }
 
-                          const baseAmount = pricePerPerson * selectedBooking.guests;
-                          const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
+                          const adults = selectedBooking.adults ?? selectedBooking.guests;
+                          const kids4to10 = selectedBooking.kids4to10 || 0;
+                          
+                          const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                          const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+                          const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                          const deposit = pricingDetails.depositPercentage;
 
                           // Update locally
                           setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
@@ -3200,6 +3509,111 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                       </select>
                     </div>
 
+                    {/* Guest Breakdown for Pricing Calculation */}
+                    {(selectedBooking.selectedMenu || selectedBooking.package) && (
+                      <div className="grid grid-cols-3 gap-3 pt-2 pb-1 border-t border-amber-200/50 mt-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">Adults (Full Price)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={(selectedBooking.adults ?? selectedBooking.guests) || ''}
+                            placeholder="0"
+                            onChange={async (e) => {
+                              const adults = Number(e.target.value) || 0;
+                              const kids4to10 = selectedBooking.kids4to10 || 0;
+                              const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                              const guests = adults + kids4to10 + kidsUnder4;
+                              
+                              let pricePerPerson = 0;
+                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              if (found) pricePerPerson = found.pricePerPerson;
+
+                              const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                              const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+                              const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, baseAmount, deposit } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, baseAmount, deposit } : prev);
+                              
+                              const updates = { guests, adults, baseAmount, deposit };
+                              await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
+                              await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
+                            }}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">Kids (4-10 yrs)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={selectedBooking.kids4to10 || ''}
+                            placeholder="0"
+                            onChange={async (e) => {
+                              const kids4to10 = Number(e.target.value) || 0;
+                              const adults = selectedBooking.adults ?? selectedBooking.guests;
+                              const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                              const guests = adults + kids4to10 + kidsUnder4;
+                              
+                              let pricePerPerson = 0;
+                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              if (found) pricePerPerson = found.pricePerPerson;
+
+                              const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                              const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+                              const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kids4to10, baseAmount, deposit } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kids4to10, baseAmount, deposit } : prev);
+                              
+                              const updates = { guests, adults, kids4to10, baseAmount, deposit };
+                              await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
+                              await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
+                            }}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">Kids (0-4 yrs) Free</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={selectedBooking.kidsUnder4 || ''}
+                            placeholder="0"
+                            onChange={async (e) => {
+                              const kidsUnder4 = Number(e.target.value) || 0;
+                              const adults = selectedBooking.adults ?? selectedBooking.guests;
+                              const kids4to10 = selectedBooking.kids4to10 || 0;
+                              const guests = adults + kids4to10 + kidsUnder4;
+                              
+                              let pricePerPerson = 0;
+                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              if (found) pricePerPerson = found.pricePerPerson;
+
+                              const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                              const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+                              const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kidsUnder4, baseAmount, deposit } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kidsUnder4, baseAmount, deposit } : prev);
+                              
+                              const updates = { guests, adults, kidsUnder4, baseAmount, deposit };
+                              await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
+                              await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
+                            }}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Show Custom Inputs if Custom or any package is selected */}
                     {(selectedBooking.selectedMenu || selectedBooking.package) && (
                       <div className="grid grid-cols-2 gap-3 pt-1">
@@ -3207,10 +3621,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           <label className="block text-xs font-semibold text-gray-500 mb-1">Base Price (£)</label>
                           <input
                             type="number"
-                            value={selectedBooking.baseAmount || 0}
+                            value={selectedBooking.baseAmount || ''}
                             onChange={async (e) => {
                               const baseAmount = Number(e.target.value) || 0;
-                              const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
+                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
@@ -3237,9 +3651,10 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           <label className="block text-xs font-semibold text-gray-500 mb-1">Deposit Required (£)</label>
                           <input
                             type="number"
-                            value={selectedBooking.deposit || 0}
+                            min={pricingDetails.depositPercentage}
+                            value={Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage) || ''}
                             onChange={async (e) => {
-                              const deposit = Number(e.target.value) || 0;
+                              const deposit = Math.max(Number(e.target.value) || 0, pricingDetails.depositPercentage);
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
@@ -3271,21 +3686,31 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 <div className="border border-purple-200 rounded-xl p-4 bg-purple-50">
                   <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp</div>
                   <div className="space-y-2">
-                    {editableBanquetPackages.map((pkg) => (
-                      <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
-                          <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{(pkg.pricePerPerson * selectedBooking.guests).toLocaleString()} for {selectedBooking.guests} guests</div>
+                    {editableBanquetPackages.map((pkg) => {
+                      const adults = selectedBooking.adults ?? selectedBooking.guests;
+                      const kids4to10 = selectedBooking.kids4to10 || 0;
+                      const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                      const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                      const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+                      const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
+                      const totalGuests = adults + kids4to10 + kidsUnder4;
+                      
+                      return (
+                        <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
+                            <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
+                          </div>
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
+                            style={{ background: '#25D366', color: 'white' }}>
+                            <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                            Send
+                          </a>
                         </div>
-                        <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${selectedBooking.guests} guests, estimated total: *£${(pkg.pricePerPerson * selectedBooking.guests).toLocaleString()}* (Excl. VAT)\n\nPlease reply with your selection! 🙏`)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send
-                        </a>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {/* Also offer Indian & Sri Lankan menus */}
                     <div className="mt-2 pt-2 border-t border-purple-100">
                       <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list:</div>
@@ -3303,6 +3728,27 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={12} />
                           Sri Lankan Menu
+                        </a>
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Venue Hall Charges', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Venue Hall Charges
+                        </a>
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Dry Hire', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Dry Hire
+                        </a>
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Kids Pricing', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Kids Pricing
                         </a>
                       </div>
                     </div>
@@ -3415,10 +3861,77 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </div>
               )}
 
-              {/* Step: Post-event extra charges */}
-              {selectedBooking.status === 'event_completed' && (
+              {/* ── STEP: Set Final Payment Due Date (mandatory after calendar) ── */}
+              {['deposit_confirmed', 'event_scheduled', 'final_invoice_sent', 'final_payment_received', 'event_completed', 'completed'].includes(selectedBooking.status) && (
+                <div className={`rounded-xl p-4 border-2 ${selectedBooking.dueDate ? 'border-amber-200 bg-amber-50' : 'border-red-400 bg-red-50'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${selectedBooking.dueDate ? 'text-amber-700' : 'text-red-700'}`}>
+                      <Icon name="CalendarDaysIcon" size={14} />
+                      {selectedBooking.dueDate ? '✅ Final Payment Due Date' : '⚠️ Set Final Payment Due Date (Required)'}
+                    </div>
+                    {selectedBooking.dueDate && !['final_payment_received', 'event_completed', 'completed'].includes(selectedBooking.status) && (
+                      <button onClick={() => setIsEditingDueDate(v => !v)} className="text-[10px] text-amber-600 hover:text-amber-900 font-semibold flex items-center gap-0.5">
+                        <Icon name="PencilIcon" size={10} /> Edit
+                      </button>
+                    )}
+                  </div>
+                  {!selectedBooking.dueDate ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-red-700 font-medium">You must set a payment due date before sending the final invoice. Default is 14 days before the event.</p>
+                      <input
+                        type="date"
+                        defaultValue={(() => {
+                          if (selectedBooking.date && selectedBooking.date !== 'N/A') {
+                            const d = new Date(selectedBooking.date);
+                            d.setDate(d.getDate() - 14);
+                            const today = new Date();
+                            return (d < today ? today : d).toISOString().split('T')[0];
+                          }
+                          return '';
+                        })()}
+                        onChange={async (e) => {
+                          const newDate = e.target.value;
+                          if (!newDate) return;
+                          const updatedBooking = { ...selectedBooking, dueDate: newDate };
+                          setSelectedBooking(updatedBooking);
+                          setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, dueDate: newDate } : b));
+                          await setDoc(doc(db, 'booking_requests', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                          await setDoc(doc(db, 'bookings', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                        }}
+                        className="w-full border-2 border-red-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400 font-bold text-gray-800"
+                      />
+                      <p className="text-[10px] text-red-500 text-center italic">⛔ Final Invoice is locked until you set this date</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-xl font-bold text-amber-900 mb-1">📅 {selectedBooking.dueDate}</div>
+                      <p className="text-xs text-amber-700">Full balance must be received by this date before the event.</p>
+                      {(isEditingDueDate && !['final_payment_received', 'event_completed', 'completed'].includes(selectedBooking.status)) && (
+                        <input
+                          type="date"
+                          defaultValue={selectedBooking.dueDate || ''}
+                          onChange={async (e) => {
+                            const newDate = e.target.value;
+                            if (!newDate) return;
+                            const updatedBooking = { ...selectedBooking, dueDate: newDate };
+                            setSelectedBooking(updatedBooking);
+                            setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, dueDate: newDate } : b));
+                            await setDoc(doc(db, 'booking_requests', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                            await setDoc(doc(db, 'bookings', selectedBooking.id), { dueDate: newDate }, { merge: true });
+                            setIsEditingDueDate(false);
+                          }}
+                          className="mt-2 w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 font-bold text-amber-900"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step: Extra Charges — only show after event is scheduled */}
+              {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
                 <div className="border border-teal-200 rounded-xl p-4 bg-teal-50">
-                  <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Post-Event Adjustments</div>
+                  <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Adjustments / Extra Charges</div>
                   {selectedBooking.extraCharges.length > 0 && (
                     <div className="space-y-2 mb-3">
                       {selectedBooking.extraCharges.map((charge, idx) => (
@@ -3445,7 +3958,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               )}
 
               {/* Step: Apply Discount */}
-              {selectedBooking.status === 'event_completed' && (
+              {['final_invoice_sent'].includes(selectedBooking.status) && (
                 <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mt-4">
                   <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-3">Apply Discount</div>
                   {selectedBooking.discount ? (
@@ -3530,8 +4043,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </div>
               )}
 
-              {/* Step: Final Invoice */}
-              {(selectedBooking.status === 'event_completed' || selectedBooking.status === 'final_invoice_sent') && selectedBooking.discountRequest?.status !== 'pending' && (
+              {/* Step: Final Invoice — only show after due date is set */}
+              {selectedBooking.status === 'final_invoice_sent' && selectedBooking.discountRequest?.status !== 'pending' && selectedBooking.dueDate && (
                 <div className="border border-yellow-200 rounded-xl p-4 bg-yellow-50">
                   <div className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-3">Final Invoice</div>
                   <div className="bg-white rounded-lg p-4 border border-yellow-100 space-y-2 mb-3">
@@ -3658,10 +4171,70 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Payment Summary</div>
                 <div className="space-y-2">
+                  {/* Guest breakdown */}
+                  {(() => {
+                    const adults = selectedBooking.adults ?? selectedBooking.guests;
+                    const kids4to10 = selectedBooking.kids4to10 || 0;
+                    const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+                    const pricePerPerson = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package))?.pricePerPerson || 0;
+                    const hasKids = kids4to10 > 0 || kidsUnder4 > 0;
+                    return (
+                      <div className="bg-white rounded-lg p-2.5 border border-gray-100 space-y-1 mb-1">
+                        <div className="text-xs font-semibold text-gray-500 mb-1.5">Guest Breakdown</div>
+                        <div className="flex justify-between text-xs text-gray-600">
+                          <span>Adults ({adults}) × £{pricePerPerson}/person</span>
+                          <span className="font-medium">£{(adults * pricePerPerson).toLocaleString()}</span>
+                        </div>
+                        {kids4to10 > 0 && (
+                          <div className="flex justify-between text-xs text-gray-600">
+                            <span>Kids 4-10 yrs ({kids4to10}) × £{kidsPrice}/person</span>
+                            <span className="font-medium">£{(kids4to10 * kidsPrice).toLocaleString()}</span>
+                          </div>
+                        )}
+                        {kidsUnder4 > 0 && (
+                          <div className="flex justify-between text-xs text-gray-600">
+                            <span>Kids 0-4 yrs ({kidsUnder4}) × Free</span>
+                            <span className="font-medium text-emerald-600">£0</span>
+                          </div>
+                        )}
+                        <div className="border-t border-gray-100 pt-1 flex justify-between text-xs font-semibold text-gray-700">
+                          <span>Total Guests</span>
+                          <span>{adults + kids4to10 + kidsUnder4}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Venue Hall Charge based on date */}
+                  {(() => {
+                    const hallCharge = getVenueHallCharge(selectedBooking.date, selectedBooking.time);
+                    if (!hallCharge) return null;
+                    return (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">🏛️ {hallCharge.label}</span>
+                        <span className="font-semibold text-indigo-700">£{hallCharge.amount.toLocaleString()}</span>
+                      </div>
+                    );
+                  })()}
+
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Total Amount</span>
-                    <span className="font-semibold text-gray-900">£{getTotalAmount(selectedBooking).toLocaleString()}</span>
+                    <span className="text-gray-600">Food Package Total</span>
+                    <span className="font-semibold text-gray-900">£{getFoodPackageTotal(selectedBooking).toLocaleString()}</span>
                   </div>
+
+                  {(() => {
+                    const hallCharge = getVenueHallCharge(selectedBooking.date, selectedBooking.time);
+                    const grandTotal = getTotalAmount(selectedBooking);
+                    return (
+                      <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-2">
+                        <span className="text-gray-800">Grand Total (incl. Hall)</span>
+                        <span className="text-gray-900">£{grandTotal.toLocaleString()}</span>
+                      </div>
+                    );
+                  })()}
+
                   {selectedBooking.discount && (
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Discount</span>
@@ -3731,6 +4304,35 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                 </button>
               )}
               {selectedBooking.status === 'deposit_confirmed' && (
+                <div className="space-y-2">
+                  {!selectedBooking.dueDate ? (
+                    <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-gray-200 text-gray-400 border border-gray-300 cursor-not-allowed">
+                      <Icon name="LockClosedIcon" size={15} />
+                      Set Payment Due Date First ↑
+                    </div>
+                  ) : (
+                    <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
+                      disabled={selectedBooking.discountRequest?.status === 'pending'}
+                      className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                      <Icon name="DocumentTextIcon" size={16} />
+                      {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {selectedBooking.status === 'final_invoice_sent' && (
+                <button
+                  onClick={() => confirmFinalPayment(selectedBooking.id)}
+                  disabled={!selectedBooking.paymentProofFinal}
+                  title={!selectedBooking.paymentProofFinal ? "Please upload the payment screenshot first" : ""}
+                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofFinal ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                >
+                  <Icon name={!selectedBooking.paymentProofFinal ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                  {!selectedBooking.paymentProofFinal ? 'Upload Screenshot to Proceed' : 'Confirm Final Payment'}
+                </button>
+              )}
+              {selectedBooking.status === 'final_payment_received' && (
                 <button onClick={() => updateStatus(selectedBooking.id, 'event_scheduled')}
                   className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
                   style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
@@ -3754,33 +4356,122 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                   </button>
                 </div>
               )}
-              {selectedBooking.status === 'event_completed' && (
-                <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
-                  disabled={selectedBooking.discountRequest?.status === 'pending'}
-                  className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
-                  <Icon name="DocumentTextIcon" size={16} />
-                  {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
-                </button>
-              )}
-              {selectedBooking.status === 'final_invoice_sent' && (
-                <button
-                  onClick={() => confirmFinalPayment(selectedBooking.id)}
-                  disabled={!selectedBooking.paymentProofFinal}
-                  title={!selectedBooking.paymentProofFinal ? "Please upload the payment screenshot first" : ""}
-                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofFinal ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
-                >
-                  <Icon name={!selectedBooking.paymentProofFinal ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofFinal ? 'Upload Screenshot to Proceed' : 'Confirm Final Payment'}
-                </button>
-              )}
-              {selectedBooking.status === 'final_payment_received' && (
-                <button onClick={() => updateStatus(selectedBooking.id, 'completed')}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
-                  <Icon name="CheckBadgeIcon" size={16} />
-                  Mark as Completed
-                </button>
-              )}
+              {selectedBooking.status === 'event_completed' && (() => {
+                const extraChargesTotal = selectedBooking.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
+                const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
+                
+                return (
+                  <div className="space-y-3">
+                    {isExtraPaymentNeeded && (
+                      <div className="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm">
+                        <div className="text-sm font-semibold text-red-800 mb-2 flex items-center gap-1.5">
+                          <Icon name="ExclamationCircleIcon" size={16} />
+                          Extra Payment Required (£{extraChargesTotal.toLocaleString()})
+                        </div>
+                        <p className="text-xs text-red-700 mb-3 leading-relaxed">
+                          Extra charges were added to this event. You must upload the payment screenshot for the remaining balance before closing the event.
+                        </p>
+                        
+                        <a href={buildWhatsAppLink(selectedBooking.phone, buildExtraInvoiceWhatsAppText(selectedBooking, bankDetails))}
+                          target="_blank" rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl mb-3 transition-colors hover:bg-green-600"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                          Send Extra Invoice via WhatsApp
+                        </a>
+
+                        {selectedBooking.paymentProofExtra ? (
+                          <div className="flex items-start gap-4">
+                            {(selectedBooking.paymentProofExtra.startsWith('http') || selectedBooking.paymentProofExtra.startsWith('data:image')) && (
+                              <div
+                                className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group flex-shrink-0 bg-gray-50"
+                                onClick={() => {
+                                  if (selectedBooking.paymentProofExtra?.startsWith('data:image')) {
+                                    const w = window.open('');
+                                    w?.document.write(`<img src="${selectedBooking.paymentProofExtra}" style="max-width: 100%; height: auto;"/>`);
+                                  } else {
+                                    window.open(selectedBooking.paymentProofExtra, '_blank');
+                                  }
+                                }}
+                                title="Click to view full image"
+                              >
+                                <img
+                                  src={selectedBooking.paymentProofExtra}
+                                  alt="Extra Payment Proof"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Icon name="MagnifyingGlassPlusIcon" size={20} className="text-white" />
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex flex-col gap-2 flex-1">
+                              <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                                <Icon name="CheckCircleIcon" size={16} />
+                                Extra payment proof received — confirm below
+                              </div>
+                              <div className="flex items-center">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  id="extra-proof-reupload"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleUploadExtraProof(selectedBooking.id, file);
+                                  }}
+                                />
+                                <label
+                                  htmlFor="extra-proof-reupload"
+                                  className="cursor-pointer text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 font-medium"
+                                >
+                                  <Icon name="ArrowPathIcon" size={14} />
+                                  {isUploadingExtraProof ? 'Uploading...' : 'Re-upload screenshot'}
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              id="extra-proof-upload"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadExtraProof(selectedBooking.id, file);
+                              }}
+                            />
+                            <label htmlFor="extra-proof-upload" className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 cursor-pointer shadow-sm">
+                              <Icon name="ArrowUpTrayIcon" size={16} />
+                              {isUploadingExtraProof ? 'Uploading...' : 'Upload Extra Payment Screenshot'}
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={() => updateStatus(selectedBooking.id, 'completed')}
+                      disabled={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra}
+                      title={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? "Please upload the extra payment screenshot first" : ""}
+                      className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? 'bg-gray-400 cursor-not-allowed border-none' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                      {isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? (
+                        <>
+                          <Icon name="LockClosedIcon" size={16} />
+                          Upload Payment to Close Event
+                        </>
+                      ) : (
+                        <>
+                          <Icon name="CheckBadgeIcon" size={16} />
+                          Mark as Completed & Close Event
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })()}
               {selectedBooking.status === 'completed' && (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-center gap-2 py-2 text-emerald-700 font-semibold text-sm bg-emerald-50 rounded-xl">
@@ -3873,6 +4564,34 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
           </div>
         </div>
       )}
+
+      {/* ─── DELETE CONFIRMATION MODAL ─── */}
+      {bookingToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-gray-100 flex flex-col items-center text-center animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4 bg-rose-50 text-rose-500">
+              <Icon name="TrashIcon" size={24} />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1">Delete Booking</h3>
+            <p className="text-sm text-gray-500 mb-6">Are you sure you want to permanently delete the booking for <span className="font-semibold text-gray-900">{bookingToDelete.name}</span>? This action cannot be undone.</p>
+            <div className="flex gap-3 w-full">
+              <button
+                onClick={() => setBookingToDelete(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteBooking}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-sm"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── CUSTOM ALERT MODAL ─── */}
       {customAlert && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">

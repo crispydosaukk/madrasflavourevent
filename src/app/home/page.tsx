@@ -139,7 +139,7 @@ export default function HomePage() {
       const guestCount = Number(bookingForm.guests) || 0;
       const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
       const baseAmount = selectedPkg ? selectedPkg.pricePerPerson * guestCount : 0;
-      const deposit = Math.round(baseAmount * (pricingDetails.depositPercentage / 100));
+      const deposit = pricingDetails.depositPercentage;
       await addDoc(collection(db, 'booking_requests'), {
         name: bookingForm.name,
         email: bookingForm.email,
@@ -173,7 +173,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       <Header onOpenModal={() => {}} />
 
       {/* Hero — two-column layout */}
@@ -280,7 +280,11 @@ export default function HomePage() {
                           </option>
                         ))}
                       </optgroup>
-
+                      <optgroup label="── Venue & Hire ──">
+                        <option value="Venue Hall">Venue Hall</option>
+                        <option value="Dry Hire">Dry Hire</option>
+                        <option value="Kids Pricing">Kids Pricing</option>
+                      </optgroup>
                     </select>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -471,40 +475,57 @@ export default function HomePage() {
                 {/* Venue Hall Charges */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
                   <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">"Venue" Hall Charges</h3>
-                  <div className="overflow-x-auto flex-grow">
+                  <div className="overflow-x-auto flex-grow mb-6">
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-gray-100">
                         {VENUE_HALL_CHARGES.map((row, i) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                            <td className="py-3 pr-4 font-bold" style={{ color: '#C8860A' }}>{row.charge}</td>
-                            {row.note && <td className="py-3 text-gray-500 italic text-xs">({row.note})</td>}
+                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.charge}</td>
+                            {row.note && <td className="py-3 text-gray-500 italic text-xs text-right pl-2">({row.note})</td>}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-amber-800 mb-1">🍷 ALCOHOL</p>
-                    <p className="text-sm text-amber-700">{TERMS_AND_CONDITIONS.alcohol}</p>
+                  <div className="mt-auto">
+                    <button
+                      onClick={() => handleEnquireNow('Venue Hall')}
+                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-4"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                    >
+                      Enquire Now
+                    </button>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <p className="text-sm font-semibold text-amber-800 mb-1">🍷 ALCOHOL</p>
+                      <p className="text-sm text-amber-700">{TERMS_AND_CONDITIONS.alcohol}</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Dry Hire Prices */}
+                {/* Dry Hire */}
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">Dry Hire Prices</h3>
-                  <div className="overflow-x-auto flex-grow">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">Dry Hire</h3>
+                  <div className="overflow-x-auto flex-grow mb-6">
                     <table className="w-full text-sm">
                       <tbody className="divide-y divide-gray-100">
                         {DRY_HIRE_PRICES?.map((row, i) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                            <td className="py-3 pr-4 text-gray-600">{row.session}</td>
-                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>£{row.price}</td>
+                            <td className="py-3 pr-4 text-gray-600 text-right">{row.session}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                  <div className="mt-auto">
+                    <button
+                      onClick={() => handleEnquireNow('Dry Hire')}
+                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                    >
+                      Enquire Now
+                    </button>
                   </div>
                 </div>
               </div>
@@ -524,16 +545,30 @@ export default function HomePage() {
                 </div>
                 <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm flex flex-col">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Kids Pricing <span className="text-sm font-normal text-gray-500">(Only Applies for over 50 Adults)</span></h3>
-                  <div className="flex flex-wrap gap-3 mt-4">
-                    {KIDS_PRICING.map((kp) => (
-                      <div key={kp.ageRange} className="flex-1 min-w-[100px] bg-gray-50 rounded-xl p-3 text-center">
-                        <div className="text-xs text-gray-500 mb-0.5">{kp.ageRange}</div>
-                        <div className="text-sm font-bold" style={{ color: '#C8860A' }}>{kp.price}</div>
-                      </div>
-                    ))}
+                  <div className="overflow-x-auto mt-4 mb-6">
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-100">
+                        {KIDS_PRICING.map((row, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="py-3 pr-4 font-semibold text-gray-800">{row.ageRange}</td>
+                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.price}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="mt-3 text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
-                    <strong>NOTE:</strong> Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.
+
+                  <div className="mt-auto">
+                    <button
+                      onClick={() => handleEnquireNow('Kids Pricing')}
+                      className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-3"
+                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                    >
+                      Enquire Now
+                    </button>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+                      <strong>NOTE:</strong> Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.
+                    </div>
                   </div>
                 </div>
               </div>
