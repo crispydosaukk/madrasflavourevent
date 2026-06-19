@@ -138,7 +138,13 @@ export default function HomePage() {
       const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
       const guestCount = Number(bookingForm.guests) || 0;
       const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
-      const baseAmount = selectedPkg ? selectedPkg.pricePerPerson * guestCount : 0;
+      const selectedExtra = LIVE_COUNTER_PACKAGE?.extras?.find(e => e.name === bookingForm.selectedPackage);
+      let baseAmount = 0;
+      if (selectedPkg) {
+        baseAmount = selectedPkg.pricePerPerson * guestCount;
+      } else if (selectedExtra) {
+        baseAmount = selectedExtra.price;
+      }
       const deposit = pricingDetails.depositPercentage;
       await addDoc(collection(db, 'booking_requests'), {
         name: bookingForm.name,
@@ -152,6 +158,7 @@ export default function HomePage() {
         package: bookingForm.selectedPackage || 'Not Selected',
         baseAmount,
         deposit,
+        extraCharges: [],
         createdAt: new Date().toISOString()
       });
       setSubmitted(true);
@@ -284,6 +291,13 @@ export default function HomePage() {
                         <option value="Venue Hall">Venue Hall</option>
                         <option value="Dry Hire">Dry Hire</option>
                         <option value="Kids Pricing">Kids Pricing</option>
+                      </optgroup>
+                      <optgroup label="── Extras ──">
+                        {(LIVE_COUNTER_PACKAGE?.extras || []).map((extra, idx) => (
+                          <option key={idx} value={extra.name}>
+                            {extra.name} — £{extra.price}
+                          </option>
+                        ))}
                       </optgroup>
                     </select>
                   </div>

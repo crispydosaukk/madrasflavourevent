@@ -17,6 +17,7 @@ type BookingStatus =
 interface ExtraCharge {
   label: string;
   amount: number;
+  isPreset?: boolean;
 }
 
 interface Discount {
@@ -651,9 +652,11 @@ export default function AdminPage() {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
       text += `*NOTE:* Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.\n\n`;
+    } else if (menuType === 'Extras') {
+      text += (editableLiveCounter.extras || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
     }
     
-    if (menuType.includes('Menu')) {
+    if (menuType.includes('Menu') || menuType === 'Extras') {
       text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
     } else {
       text += `Please let us know if you have any questions or would like to proceed with booking! 🙏`;
@@ -743,8 +746,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
-    const extraChargesTotal = booking.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
-    const extrasList = booking.extraCharges?.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n') || '';
+    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+    const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
+    const extrasList = nonPreset.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
 
     return `Hi ${booking.name.split(' ')[0]},
 
@@ -1373,6 +1377,360 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return food + (hall?.amount || 0);
   };
 
+  const downloadInvoicePDF = (booking: Booking) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const hallCharge = getVenueHallCharge(booking.date, booking.time);
+    const grandTotal = getTotalAmount(booking);
+    const discountAmount = getDiscountAmount(booking);
+    
+    // Format dates
+    const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
+    const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
+
+    // Construct logo source (ensure it points to the absolute path of the domain)
+    const logoUrl = window.location.origin + '/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png';
+
+    // Build the proof screenshots section
+    let screenshotsHTML = '';
+    if (booking.paymentProofDeposit || booking.paymentProofFinal || booking.paymentProofExtra) {
+      screenshotsHTML += `
+        <div class="section-title">Payment Verification Screenshots</div>
+        <div class="proof-container">
+      `;
+      if (booking.paymentProofDeposit) {
+        screenshotsHTML += `
+          <div class="proof-card">
+            <div class="proof-label">Deposit Payment Proof</div>
+            <img src="${booking.paymentProofDeposit}" alt="Deposit Proof" />
+          </div>
+        `;
+      }
+      if (booking.paymentProofFinal) {
+        screenshotsHTML += `
+          <div class="proof-card">
+            <div class="proof-label">Final Payment Proof</div>
+            <img src="${booking.paymentProofFinal}" alt="Final Proof" />
+          </div>
+        `;
+      }
+      if (booking.paymentProofExtra) {
+        screenshotsHTML += `
+          <div class="proof-card">
+            <div class="proof-label">Extra Charges Payment Proof</div>
+            <img src="${booking.paymentProofExtra}" alt="Extra Proof" />
+          </div>
+        `;
+      }
+      screenshotsHTML += `</div>`;
+    }
+
+    // Build extra charges rows
+    let extrasRows = '';
+    if (booking.extraCharges && booking.extraCharges.length > 0) {
+      booking.extraCharges.forEach(extra => {
+        extrasRows += `
+          <tr>
+            <td>• ${extra.label}</td>
+            <td class="text-right">+£${extra.amount.toLocaleString()}</td>
+          </tr>
+        `;
+      });
+    }
+
+    // Build html content
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Booking Summary & Invoice - ${booking.name}</title>
+        <style>
+          body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            line-height: 1.5;
+            font-size: 14px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #C8860A;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header-left h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+          }
+          .header-left p {
+            margin: 0;
+            color: #666;
+            font-size: 13px;
+          }
+          .logo {
+            max-height: 50px;
+            object-fit: contain;
+          }
+          .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+          }
+          .details-card h3 {
+            margin: 0 0 10px 0;
+            color: #C8860A;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+          }
+          .details-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+          }
+          .details-label {
+            color: #666;
+            font-weight: 500;
+          }
+          .details-value {
+            font-weight: 600;
+            color: #1a1a1a;
+          }
+          .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+          }
+          th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+          }
+          td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+          }
+          .text-right {
+            text-align: right;
+          }
+          .totals-table {
+            width: 50%;
+            margin-left: auto;
+          }
+          .totals-table td {
+            border: none;
+            padding: 6px 10px;
+          }
+          .grand-total {
+            font-size: 16px;
+            font-weight: 700;
+            color: #C8860A;
+            border-top: 2px solid #C8860A !important;
+            border-bottom: 2px solid #C8860A !important;
+            padding: 10px !important;
+          }
+          .proof-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+            page-break-inside: avoid;
+          }
+          .proof-card {
+            flex: 1;
+            min-width: 200px;
+            max-width: 250px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            background-color: #fdfdfd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            text-align: center;
+          }
+          .proof-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+          }
+          .proof-card img {
+            max-width: 100%;
+            max-height: 180px;
+            object-fit: contain;
+            border-radius: 4px;
+          }
+          .footer-note {
+            margin-top: 50px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            text-align: center;
+            color: #888;
+            font-size: 11px;
+          }
+          @media print {
+            body {
+              padding: 20px;
+            }
+            .proof-card {
+              page-break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="header-left">
+            <h1>INVOICE & ORDER SUMMARY</h1>
+            <p>Booking Reference: <strong>#${booking.id}</strong></p>
+            <p>Enquiry Date: ${formattedEnquiryDate}</p>
+          </div>
+          <img class="logo" src="${logoUrl}" alt="Honeymoon Events Logo" />
+        </div>
+
+        <div class="grid-2">
+          <div class="details-card">
+            <h3>Customer Details</h3>
+            <div class="details-row">
+              <span class="details-label">Name</span>
+              <span class="details-value">${booking.name || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Phone</span>
+              <span class="details-value">${booking.phone || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Email</span>
+              <span class="details-value">${booking.email || 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="details-card">
+            <h3>Event Details</h3>
+            <div class="details-row">
+              <span class="details-label">Event Type</span>
+              <span class="details-value">${booking.eventType || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Date & Time</span>
+              <span class="details-value">${formattedDate} (${booking.time || 'N/A'})</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Total Guests</span>
+              <span class="details-value">${adults + kids4to10 + kidsUnder4} Guests</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Order Items & Package details</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Package: ${booking.selectedMenu || booking.package || 'Not Selected'}</strong>
+                <div style="font-size: 12px; color: #666; margin-top: 4px;">
+                  • Adults: ${adults} × £${pricePerPerson}/person<br/>
+                  • Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person<br/>
+                  • Kids (0-4 yrs): ${kidsUnder4} × Free
+                </div>
+              </td>
+              <td class="text-right" style="vertical-align: middle;">£${booking.baseAmount.toLocaleString()}</td>
+            </tr>
+            ${hallCharge ? `
+            <tr>
+              <td>🏛️ ${hallCharge.label}</td>
+              <td class="text-right">£${hallCharge.amount.toLocaleString()}</td>
+            </tr>
+            ` : ''}
+            ${extrasRows}
+          </tbody>
+        </table>
+
+        <div class="section-title">Payment Summary</div>
+        <table class="totals-table">
+          <tbody>
+            <tr>
+              <td>Subtotal:</td>
+              <td class="text-right">£${(booking.baseAmount + (hallCharge?.amount || 0) + extraChargesTotal).toLocaleString()}</td>
+            </tr>
+            ${booking.discount ? `
+            <tr>
+              <td style="color: #d9534f;">Discount (${booking.discount.reason}):</td>
+              <td class="text-right" style="color: #d9534f;">-£${discountAmount.toLocaleString()}</td>
+            </tr>
+            ` : ''}
+            <tr class="grand-total">
+              <td>Grand Total (Incl. Hall):</td>
+              <td class="text-right">£${grandTotal.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 15px;">Deposit Paid:</td>
+              <td class="text-right" style="padding-top: 15px; color: #2b7a4a;">-£${booking.deposit.toLocaleString()}</td>
+            </tr>
+            <tr>
+              <td>Balance Due:</td>
+              <td class="text-right" style="font-weight: bold; color: ${booking.finalPaymentPaid ? '#2b7a4a' : '#c86a00'}">
+                ${booking.finalPaymentPaid ? 'PAID IN FULL ✓' : `£${(grandTotal - booking.deposit).toLocaleString()}`}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        ${screenshotsHTML}
+
+        <div class="footer-note">
+          Thank you for choosing Honeymoon Events. If you have any questions regarding this invoice, please contact us.
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 600);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const enquiries = bookings.filter(b => b.status === 'new_enquiry');
   const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed');
   const completedBookings = bookings.filter(b => b.status === 'completed').sort((a, b) => {
@@ -1912,9 +2270,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#C8860A' }}>
                                 Manage <Icon name="ChevronRightIcon" size={12} />
                               </button>
-                              <button onClick={() => handleDeleteBooking(booking.id, booking.name)} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Delete Booking">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
+                              {currentUser?.role === 'Super Admin' && (
+                                <button onClick={() => handleDeleteBooking(booking.id, booking.name)} className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors" title="Delete Booking">
+                                  <Icon name="TrashIcon" size={14} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -2428,9 +2788,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {editableIndianMenu[section.key].map((item, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <input type="text" value={item} onChange={(e) => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <button onClick={() => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                              <Icon name="TrashIcon" size={14} />
-                            </button>
+                            {currentUser?.role === 'Super Admin' && (
+                              <button onClick={() => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
+                                <Icon name="TrashIcon" size={14} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2482,9 +2844,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {editableSLMenu[section.key].map((item, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <input type="text" value={item} onChange={(e) => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <button onClick={() => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                              <Icon name="TrashIcon" size={14} />
-                            </button>
+                            {currentUser?.role === 'Super Admin' && (
+                              <button onClick={() => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
+                                <Icon name="TrashIcon" size={14} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2537,9 +2901,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               <span className="text-sm text-gray-500">£</span>
                               <input type="number" step="0.01" value={item.price} onChange={(e) => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? { ...v, price: parseFloat(e.target.value) || 0 } : v) }))} className="w-20 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none text-right" />
                             </div>
-                            <button onClick={() => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                              <Icon name="TrashIcon" size={14} />
-                            </button>
+                            {currentUser?.role === 'Super Admin' && (
+                              <button onClick={() => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
+                                <Icon name="TrashIcon" size={14} />
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2588,9 +2954,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[b.status]}`} />
                         {STATUS_LABELS[b.status]}
                       </span>
-                      <button onClick={() => handleDeleteBooking(b.id, b.name)} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors" title="Delete History Record">
-                        <Icon name="TrashIcon" size={14} />
+                      <button
+                        onClick={() => downloadInvoicePDF(b)}
+                        className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold border border-amber-200 shadow-sm"
+                        title="Download Invoice PDF"
+                      >
+                        <Icon name="ArrowDownTrayIcon" size={14} />
+                        PDF
                       </button>
+                      {currentUser?.role === 'Super Admin' && (
+                        <button onClick={() => handleDeleteBooking(b.id, b.name)} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors" title="Delete History Record">
+                          <Icon name="TrashIcon" size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -3008,7 +3384,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </div>
           )}
           {activeTab === 'access' && (
-            <AccessControl />
+            <AccessControl currentUserRole={currentUser?.role} />
           )}
 
           {/* ─── BOOKING TRACKER ─── */}
@@ -3656,9 +4032,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           let pricePerPerson = 0;
                           let selectedPkgName = '';
+                          let baseAmount = 0;
+
+                          const foundExtra = editableLiveCounter.extras.find(ex => ex.name === val);
 
                           if (val === 'custom') {
                             selectedPkgName = 'Custom Package';
+                          } else if (foundExtra) {
+                            selectedPkgName = foundExtra.name;
+                            baseAmount = foundExtra.price;
                           } else {
                             const found = editableBanquetPackages.find(p => p.name === val);
                             if (found) {
@@ -3676,7 +4058,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                           const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-                          const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                          if (!foundExtra && val !== 'custom') {
+                            baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                          }
                           const deposit = pricingDetails.depositPercentage;
 
                           // Update locally
@@ -3729,10 +4113,71 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <option value="Table Service">Table Service</option>
                           <option value="Kids Pricing">Kids Pricing</option>
                         </optgroup>
+                        <optgroup label="Extras">
+                          {(editableLiveCounter?.extras || []).map(extra => (
+                            <option key={extra.name} value={extra.name}>
+                              {extra.name} (£{extra.price})
+                            </option>
+                          ))}
+                        </optgroup>
                         <optgroup label="Custom">
                           <option value="custom">Custom Price Package</option>
                         </optgroup>
                       </select>
+                    </div>
+
+                    {/* Select Extras Checkbox List */}
+                    <div className="mt-3 border-t border-amber-200/50 pt-3">
+                      <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
+                      <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
+                        {(editableLiveCounter?.extras || []).map((extra) => {
+                          const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
+                          return (
+                            <label key={extra.name} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50 p-1.5 rounded transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={async (e) => {
+                                  const checked = e.target.checked;
+                                  let newExtraCharges = [...(selectedBooking.extraCharges || [])];
+                                  if (checked) {
+                                    if (!newExtraCharges.some(c => c.label === extra.name)) {
+                                      newExtraCharges.push({ label: extra.name, amount: extra.price, isPreset: true });
+                                    }
+                                  } else {
+                                    newExtraCharges = newExtraCharges.filter(c => c.label !== extra.name);
+                                  }
+
+                                  // Update locally
+                                  setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
+                                    ...b,
+                                    extraCharges: newExtraCharges
+                                  } : b));
+                                  setSelectedBooking(prev => prev?.id === selectedBooking.id ? {
+                                    ...prev,
+                                    extraCharges: newExtraCharges
+                                  } : prev);
+
+                                  // Save to Firestore
+                                  try {
+                                    await setDoc(doc(db, 'booking_requests', selectedBooking.id), { extraCharges: newExtraCharges }, { merge: true });
+                                    await setDoc(doc(db, 'bookings', selectedBooking.id), {
+                                      ...selectedBooking,
+                                      extraCharges: newExtraCharges,
+                                      updatedAt: new Date().toISOString()
+                                    }, { merge: true });
+                                  } catch (err) {
+                                    console.error('Error saving extra charges:', err);
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                              />
+                              <span className="flex-1 text-gray-800">{extra.name}</span>
+                              <span className="font-semibold text-amber-700">£{extra.price}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Guest Breakdown for Pricing Calculation */}
@@ -3927,7 +4372,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n🎪 *Extras Available:*\n${(editableLiveCounter?.extras || []).map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -3954,6 +4399,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={12} />
                           Sri Lankan Menu
+                        </a>
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Extras', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Extras
                         </a>
                         <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Venue Hall Charges', selectedBooking.guests)}
                           target="_blank" rel="noopener noreferrer"
@@ -4088,7 +4540,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
 
               {/* ── STEP: Set Final Payment Due Date (mandatory after calendar) ── */}
-              {['deposit_confirmed', 'event_scheduled', 'final_invoice_sent', 'final_payment_received', 'event_completed', 'completed'].includes(selectedBooking.status) && (
+              {['deposit_confirmed', 'final_invoice_sent'].includes(selectedBooking.status) && (
                 <div className={`rounded-xl p-4 border-2 ${selectedBooking.dueDate ? 'border-amber-200 bg-amber-50' : 'border-red-400 bg-red-50'}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${selectedBooking.dueDate ? 'text-amber-700' : 'text-red-700'}`}>
@@ -4158,19 +4610,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
                 <div className="border border-teal-200 rounded-xl p-4 bg-teal-50">
                   <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Adjustments / Extra Charges</div>
-                  {selectedBooking.extraCharges.length > 0 && (
+                  {selectedBooking.extraCharges.some(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label)) && (
                     <div className="space-y-2 mb-3">
-                      {selectedBooking.extraCharges.map((charge, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-teal-100">
-                          <span className="text-sm text-gray-700">{charge.label}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-900">+£{charge.amount.toLocaleString()}</span>
-                            <button onClick={() => removeExtraCharge(selectedBooking.id, idx)} className="text-red-400 hover:text-red-600">
-                              <Icon name="XMarkIcon" size={14} />
-                            </button>
+                      {selectedBooking.extraCharges
+                        .map((charge, idx) => ({ charge, idx }))
+                        .filter(({ charge }) => !charge.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === charge.label))
+                        .map(({ charge, idx }) => (
+                          <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-teal-100">
+                            <span className="text-sm text-gray-700">{charge.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-900">+£{charge.amount.toLocaleString()}</span>
+                              <button onClick={() => removeExtraCharge(selectedBooking.id, idx)} className="text-red-400 hover:text-red-600">
+                                <Icon name="XMarkIcon" size={14} />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -4445,7 +4900,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     );
                   })()}
 
-                  <div className="flex justify-between text-sm">
+                  {selectedBooking.extraCharges && selectedBooking.extraCharges.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-gray-500 mt-2 mb-1">Extras</div>
+                      {selectedBooking.extraCharges.map((c, i) => (
+                        <div key={i} className="flex justify-between text-xs text-gray-600">
+                          <span>• {c.label}</span>
+                          <span className="font-medium text-amber-700">+£{c.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-sm mt-1">
                     <span className="text-gray-600">Food Package Total</span>
                     <span className="font-semibold text-gray-900">£{getFoodPackageTotal(selectedBooking).toLocaleString()}</span>
                   </div>
@@ -4583,7 +5050,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
               {selectedBooking.status === 'event_completed' && (() => {
-                const extraChargesTotal = selectedBooking.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0;
+                const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+                const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
                 const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
                 
                 return (
@@ -4711,6 +5179,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <Icon name="ChatBubbleLeftRightIcon" size={16} />
                     Send Final Summary via WhatsApp
                   </a>
+                  <button
+                    onClick={() => downloadInvoicePDF(selectedBooking)}
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 transition-colors shadow-sm"
+                  >
+                    <Icon name="ArrowDownTrayIcon" size={16} />
+                    Download Invoice PDF
+                  </button>
                 </div>
               )}
             </div>

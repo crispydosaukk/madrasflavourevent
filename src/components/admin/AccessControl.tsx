@@ -17,7 +17,7 @@ const getSecondaryAuth = () => {
   return getAuth(app2);
 };
 
-export default function AccessControl() {
+export default function AccessControl({ currentUserRole }: { currentUserRole?: string }) {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'permissions'>('users');
   
   // Data
@@ -94,16 +94,16 @@ export default function AccessControl() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        {activeTab === 'users' && <UsersTab users={users} roles={roles} />}
-        {activeTab === 'roles' && <RolesTab roles={roles} permissions={permissions} />}
-        {activeTab === 'permissions' && <PermissionsTab permissions={permissions} />}
+        {activeTab === 'users' && <UsersTab users={users} roles={roles} currentUserRole={currentUserRole} />}
+        {activeTab === 'roles' && <RolesTab roles={roles} permissions={permissions} currentUserRole={currentUserRole} />}
+        {activeTab === 'permissions' && <PermissionsTab permissions={permissions} currentUserRole={currentUserRole} />}
       </div>
     </div>
   );
 }
 
 // ─── USERS TAB ──────────────────────────────────────────────────────────────
-function UsersTab({ users, roles }: { users: any[], roles: any[] }) {
+function UsersTab({ users, roles, currentUserRole }: { users: any[], roles: any[], currentUserRole?: string }) {
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', roleId: '' });
@@ -218,7 +218,9 @@ function UsersTab({ users, roles }: { users: any[], roles: any[] }) {
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button onClick={() => handleOpenEdit(u)} className="text-blue-500 hover:text-blue-700 p-2"><Icon name="PencilSquareIcon" size={16} /></button>
-                    <button onClick={() => handleDelete(u.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    {currentUserRole === 'Super Admin' && (
+                      <button onClick={() => handleDelete(u.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -231,7 +233,7 @@ function UsersTab({ users, roles }: { users: any[], roles: any[] }) {
 }
 
 // ─── ROLES TAB ──────────────────────────────────────────────────────────────
-function RolesTab({ roles, permissions }: { roles: any[], permissions: any[] }) {
+function RolesTab({ roles, permissions, currentUserRole }: { roles: any[], permissions: any[], currentUserRole?: string }) {
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', permissionIds: [] as string[] });
@@ -332,7 +334,9 @@ function RolesTab({ roles, permissions }: { roles: any[], permissions: any[] }) 
               <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-1">
                     <button onClick={() => handleOpenEdit(r)} className="text-blue-500 hover:text-blue-700 p-2"><Icon name="PencilSquareIcon" size={16} /></button>
-                    <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    {currentUserRole === 'Super Admin' && (
+                      <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    )}
                 </div>
               </td>
             </tr>
@@ -344,7 +348,7 @@ function RolesTab({ roles, permissions }: { roles: any[], permissions: any[] }) 
 }
 
 // ─── PERMISSIONS TAB ────────────────────────────────────────────────────────
-function PermissionsTab({ permissions }: { permissions: any[] }) {
+function PermissionsTab({ permissions, currentUserRole }: { permissions: any[], currentUserRole?: string }) {
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -409,7 +413,9 @@ function PermissionsTab({ permissions }: { permissions: any[] }) {
               <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-1">
                     <button onClick={() => handleOpenEdit(p)} className="text-blue-500 hover:text-blue-700 p-2"><Icon name="PencilSquareIcon" size={16} /></button>
-                    <button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    {currentUserRole === 'Super Admin' && (
+                      <button onClick={() => handleDelete(p.id)} className="text-red-500 hover:text-red-700 p-2"><Icon name="TrashIcon" size={16} /></button>
+                    )}
                 </div>
               </td>
             </tr>
