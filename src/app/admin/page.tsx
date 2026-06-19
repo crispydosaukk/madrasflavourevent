@@ -59,6 +59,8 @@ interface Booking {
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
   paymentProofExtra?: string;
+  paymentMethodDeposit?: string;
+  paymentMethodFinal?: string;
   discount?: Discount;
   discountRequest?: DiscountRequest;
   enquiryDate: string;
@@ -261,6 +263,18 @@ export default function AdminPage() {
   const [discountTab, setDiscountTab] = useState<'pending' | 'history'>('pending');
   const [trackingBookingId, setTrackingBookingId] = useState<string>('');
   const [trackerSearch, setTrackerSearch] = useState<string>('');
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState<string>('');
+  const [finalPaymentMethod, setFinalPaymentMethod] = useState<string>('');
+
+  useEffect(() => {
+    if (selectedBooking) {
+      setDepositPaymentMethod(selectedBooking.paymentMethodDeposit || '');
+      setFinalPaymentMethod(selectedBooking.paymentMethodFinal || '');
+    } else {
+      setDepositPaymentMethod('');
+      setFinalPaymentMethod('');
+    }
+  }, [selectedBooking?.id, selectedBooking?.paymentMethodDeposit, selectedBooking?.paymentMethodFinal]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -303,6 +317,9 @@ export default function AdminPage() {
           extraCharges: data.extraCharges || [],
           paymentProofDeposit: data.paymentProofDeposit,
           paymentProofFinal: data.paymentProofFinal,
+          paymentProofExtra: data.paymentProofExtra,
+          paymentMethodDeposit: data.paymentMethodDeposit,
+          paymentMethodFinal: data.paymentMethodFinal,
           discount: data.discount,
           discountRequest: data.discountRequest,
           enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -746,9 +763,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
     
-    const isDepositPaid = booking.depositPaid || booking.status !== 'new_enquiry';
+    const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isFinalPaid = booking.finalPaymentPaid;
-    const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra;
+    const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
     
     const totalPaid = (isDepositPaid ? booking.deposit : 0) +
                       (isFinalPaid ? finalPaymentPaidAmt : 0) +
@@ -757,8 +774,8 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const remainingBalance = grandTotal - totalPaid;
     
     const breakdownText = `*💳 Payment Breakdown:*\n` +
-      `• Deposit (Advance Payment): £${booking.deposit.toLocaleString()} (${isDepositPaid ? 'Paid' : 'Pending'})\n` +
-      `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? 'Paid' : 'Pending'})\n` +
+      `• Deposit Paid: £${booking.deposit.toLocaleString()} (${isDepositPaid ? (booking.paymentMethodDeposit ? `Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
+      `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
       (extraChargesTotal > 0 ? `• Extras / Adjustments: £${extraChargesTotal.toLocaleString()} (${isExtraPaid ? 'Paid' : 'Pending'})\n` : '') +
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
@@ -847,17 +864,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
-  const confirmDepositPaid = async (id: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, depositPaid: true, status: 'deposit_confirmed' } : b));
-    setSelectedBooking(prev => prev?.id === id ? { ...prev, depositPaid: true, status: 'deposit_confirmed' } : prev);
+  const confirmDepositPaid = async (id: string, method: string) => {
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, depositPaid: true, status: 'deposit_confirmed', paymentMethodDeposit: method } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, depositPaid: true, status: 'deposit_confirmed', paymentMethodDeposit: method } : prev);
     try {
-      await setDoc(doc(db, 'booking_requests', id), { depositPaid: true, status: 'deposit_confirmed' }, { merge: true });
+      await setDoc(doc(db, 'booking_requests', id), { depositPaid: true, status: 'deposit_confirmed', paymentMethodDeposit: method }, { merge: true });
       const currentBooking = bookings.find(b => b.id === id);
       if (currentBooking) {
         const bookingData = {
           ...currentBooking,
           depositPaid: true,
           status: 'deposit_confirmed',
+          paymentMethodDeposit: method,
           updatedAt: new Date().toISOString()
         };
         const cleanBookingData = Object.fromEntries(
@@ -1078,17 +1096,26 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
-  const confirmFinalPayment = async (id: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received' } : b));
-    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received' } : prev);
+  const confirmFinalPayment = async (id: string, method: string) => {
+    const currentBooking = bookings.find(b => b.id === id);
+    const extraProof = currentBooking?.paymentProofFinal || '';
+    
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method, paymentProofExtra: b.paymentProofExtra || extraProof } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method, paymentProofExtra: prev.paymentProofExtra || extraProof } : prev);
     try {
-      await setDoc(doc(db, 'booking_requests', id), { finalPaymentPaid: true, status: 'final_payment_received' }, { merge: true });
-      const currentBooking = bookings.find(b => b.id === id);
+      await setDoc(doc(db, 'booking_requests', id), { 
+        finalPaymentPaid: true, 
+        status: 'final_payment_received', 
+        paymentMethodFinal: method, 
+        paymentProofExtra: currentBooking?.paymentProofExtra || extraProof 
+      }, { merge: true });
       if (currentBooking) {
         const bookingData = {
           ...currentBooking,
           finalPaymentPaid: true,
           status: 'final_payment_received',
+          paymentMethodFinal: method,
+          paymentProofExtra: currentBooking.paymentProofExtra || extraProof,
           updatedAt: new Date().toISOString()
         };
         const cleanBookingData = Object.fromEntries(
@@ -1413,6 +1440,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
+    const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
+    const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
     
     // Format dates
     const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
@@ -1727,39 +1756,55 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </td>
             </tr>
             <tr>
-              <td style="padding-top: 8px; padding-left: 10px; color: #555;">• Deposit Paid (Advance Payment):</td>
-              <td class="text-right" style="padding-top: 8px; color: ${booking.depositPaid || booking.status !== 'new_enquiry' ? '#2b7a4a' : '#c86a00'}; font-weight: 500;">
-                ${booking.depositPaid || booking.status !== 'new_enquiry' ? `-£${booking.deposit.toLocaleString()} (Paid)` : `£${booking.deposit.toLocaleString()} (Pending)`}
+              <td style="padding-top: 8px; padding-left: 10px; color: #555;">
+                • Deposit Paid:
+                ${isDepositPaid && booking.paymentMethodDeposit ? `
+                  <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
+                    Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}
+                  </div>
+                ` : ''}
+              </td>
+              <td class="text-right" style="padding-top: 8px; color: ${isDepositPaid ? '#2b7a4a' : '#c86a00'}; font-weight: 500;">
+                ${isDepositPaid ? `-£${booking.deposit.toLocaleString()} (Paid)` : `£${booking.deposit.toLocaleString()} (Pending)`}
               </td>
             </tr>
             <tr>
-              <td style="padding-left: 10px; color: #555;">• Final Payment (Main Balance):</td>
+              <td style="padding-left: 10px; color: #555;">
+                • Final Payment (Main Balance):
+                ${booking.finalPaymentPaid && booking.paymentMethodFinal ? `
+                  <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
+                    Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}
+                  </div>
+                ` : ''}
+              </td>
               <td class="text-right" style="color: ${booking.finalPaymentPaid ? '#2b7a4a' : '#c86a00'}; font-weight: 500;">
                 ${booking.finalPaymentPaid ? `-£${finalPaymentPaidAmt.toLocaleString()} (Paid)` : `£${finalPaymentPaidAmt.toLocaleString()} (Pending)`}
               </td>
             </tr>
             
-            ${extraChargesTotal > 0 ? `
+            ${(booking.extraCharges || []).map(extra => `
             <tr>
-              <td style="padding-left: 10px; color: #555;">
-                • Extras / Adjustments:
-                <div style="font-size: 11px; color: #777; margin-left: 10px; margin-top: 2px;">
-                  ${booking.extraCharges.map(extra => `${extra.label} (+£${extra.amount.toLocaleString()})`).join(', ')}
-                </div>
+              <td style="padding-left: 10px; color: #555; vertical-align: top;">
+                • ${extra.label}:
+                ${isExtraPaid && booking.paymentMethodFinal ? `
+                  <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
+                    Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}
+                  </div>
+                ` : ''}
               </td>
-              <td class="text-right" style="color: ${(booking.status === 'completed' || booking.paymentProofExtra) ? '#2b7a4a' : '#c86a00'}; font-weight: 500; vertical-align: top;">
-                ${(booking.status === 'completed' || booking.paymentProofExtra) ? `-£${extraChargesTotal.toLocaleString()} (Paid)` : `£${extraChargesTotal.toLocaleString()} (Pending)`}
+              <td class="text-right" style="color: ${isExtraPaid ? '#2b7a4a' : '#c86a00'}; font-weight: 500; vertical-align: top;">
+                ${isExtraPaid ? `-£${extra.amount.toLocaleString()} (Paid)` : `£${extra.amount.toLocaleString()} (Pending)`}
               </td>
             </tr>
-            ` : ''}
+            `).join('')}
             
             <tr style="border-top: 1px solid #ddd;">
               <td style="font-weight: bold; padding-top: 10px;">Total Paid:</td>
               <td class="text-right" style="font-weight: bold; color: #2b7a4a; padding-top: 10px;">
                 £${(
-                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (isDepositPaid ? booking.deposit : 0) +
                   (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                  (isExtraPaid ? extraChargesTotal : 0)
                 ).toLocaleString()}
               </td>
             </tr>
@@ -1767,19 +1812,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <td style="font-weight: bold; padding-bottom: 10px;">Remaining Balance Due:</td>
               <td class="text-right" style="font-weight: bold; color: ${
                 (grandTotal - (
-                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (isDepositPaid ? booking.deposit : 0) +
                   (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                  (isExtraPaid ? extraChargesTotal : 0)
                 )) <= 0 ? '#2b7a4a' : '#c86a00'
               }; padding-bottom: 10px;">
                 ${(grandTotal - (
-                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (isDepositPaid ? booking.deposit : 0) +
                   (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                  (isExtraPaid ? extraChargesTotal : 0)
                 )) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - (
-                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (isDepositPaid ? booking.deposit : 0) +
                   (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                  (isExtraPaid ? extraChargesTotal : 0)
                 )).toLocaleString()}`}
               </td>
             </tr>
@@ -3372,7 +3417,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               {/* Deposit Proof */}
                               {b.paymentProofDeposit ? (
                                 <div className="w-full text-center">
-                                  <div className="text-xs font-semibold text-gray-500 mb-1.5">Advance Payment</div>
+                                  <div className="text-xs font-semibold text-gray-500 mb-1.5">Deposit Payment</div>
                                   <div 
                                     className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
                                     onClick={() => {
@@ -4565,6 +4610,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <Icon name="CheckCircleIcon" size={16} />
                           Payment proof received
                         </div>
+
+                        {/* Styled payment method selection */}
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 my-1">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">Select Payment Method:</div>
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {[
+                              { label: 'Paid by Cash', value: 'Paid by Cash' },
+                              { label: 'Paid by Card', value: 'Paid by Card' },
+                              { label: 'Paid by Bank Transfer', value: 'Paid by Bank Transfer' }
+                            ].map((opt) => {
+                              const isSelected = depositPaymentMethod === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setDepositPaymentMethod(opt.value)}
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
+                                    isSelected
+                                      ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span>{opt.label}</span>
+                                  {isSelected && (
+                                    <span className="text-amber-600">
+                                      <Icon name="CheckIcon" size={14} />
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <div className="flex items-center">
                           <input
                             type="file"
@@ -4874,6 +4953,40 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <Icon name="CheckCircleIcon" size={16} />
                           Final payment proof received — confirm below
                         </div>
+
+                        {/* Styled payment method selection */}
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 my-1">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">Select Payment Method:</div>
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {[
+                              { label: 'Paid by Cash', value: 'Paid by Cash' },
+                              { label: 'Paid by Card', value: 'Paid by Card' },
+                              { label: 'Paid by Bank Transfer', value: 'Paid by Bank Transfer' }
+                            ].map((opt) => {
+                              const isSelected = finalPaymentMethod === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setFinalPaymentMethod(opt.value)}
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
+                                    isSelected
+                                      ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
+                                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span>{opt.label}</span>
+                                  {isSelected && (
+                                    <span className="text-amber-600">
+                                      <Icon name="CheckIcon" size={14} />
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
                         <div className="flex items-center">
                           <input
                             type="file"
@@ -4998,9 +5111,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const extraChargesTotal = (selectedBooking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
                     const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
                     
-                    const isDepositPaid = selectedBooking.depositPaid || selectedBooking.status !== 'new_enquiry';
+                    const isDepositPaid = selectedBooking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(selectedBooking.status);
                     const isFinalPaid = selectedBooking.finalPaymentPaid;
-                    const isExtraPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra;
+                    const isExtraPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra || selectedBooking.finalPaymentPaid;
                     
                     const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
                                       (isFinalPaid ? finalPaymentPaidAmt : 0) +
@@ -5025,29 +5138,50 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <div className="border-t border-dashed border-gray-200 mt-2 pt-2 space-y-1">
                           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Payment Breakdown</div>
                           
-                          {/* Deposit (Advance Payment) */}
+                          {/* Deposit */}
                           <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Deposit (Advance Payment)</span>
-                            <span className={`font-semibold ${isDepositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                              £{selectedBooking.deposit.toLocaleString()} {isDepositPaid ? '✓ Paid' : '(pending)'}
-                            </span>
+                            <span className="text-gray-500">Deposit</span>
+                            <div className="text-right">
+                              <span className={`font-semibold ${isDepositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                                £{selectedBooking.deposit.toLocaleString()} {isDepositPaid ? '✓ Paid' : '(pending)'}
+                              </span>
+                              {isDepositPaid && selectedBooking.paymentMethodDeposit && (
+                                <span className="block text-[10px] text-gray-400 font-normal">
+                                  via {selectedBooking.paymentMethodDeposit.replace('Paid by ', '')}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Final Payment (Main Balance) */}
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500">Final Payment (Main Balance)</span>
-                            <span className={`font-semibold ${isFinalPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                              £{finalPaymentPaidAmt.toLocaleString()} {isFinalPaid ? '✓ Paid' : '(pending)'}
-                            </span>
+                            <div className="text-right">
+                              <span className={`font-semibold ${isFinalPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                                £{finalPaymentPaidAmt.toLocaleString()} {isFinalPaid ? '✓ Paid' : '(pending)'}
+                              </span>
+                              {isFinalPaid && selectedBooking.paymentMethodFinal && (
+                                <span className="block text-[10px] text-gray-400 font-normal">
+                                  via {selectedBooking.paymentMethodFinal.replace('Paid by ', '')}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Extras */}
                           {extraChargesTotal > 0 && (
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Extras / Adjustments</span>
-                              <span className={`font-semibold ${isExtraPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                                £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : '(pending)'}
-                              </span>
+                              <div className="text-right">
+                                <span className={`font-semibold ${isExtraPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                                  £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : '(pending)'}
+                                </span>
+                                {isExtraPaid && selectedBooking.paymentMethodFinal && (
+                                  <span className="block text-[10px] text-gray-400 font-normal">
+                                    via {selectedBooking.paymentMethodFinal.replace('Paid by ', '')}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
 
@@ -5109,13 +5243,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
               {selectedBooking.status === 'deposit_pending' && (
                 <button
-                  onClick={() => confirmDepositPaid(selectedBooking.id)}
-                  disabled={!selectedBooking.paymentProofDeposit}
-                  title={!selectedBooking.paymentProofDeposit ? "Please upload the payment screenshot first" : ""}
-                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofDeposit ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                  onClick={() => {
+                    if (!depositPaymentMethod) return;
+                    confirmDepositPaid(selectedBooking.id, depositPaymentMethod);
+                  }}
+                  disabled={!selectedBooking.paymentProofDeposit || !depositPaymentMethod}
+                  title={!selectedBooking.paymentProofDeposit ? "Please upload the payment screenshot first" : !depositPaymentMethod ? "Please select a payment method" : ""}
+                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                 >
-                  <Icon name={!selectedBooking.paymentProofDeposit ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofDeposit ? 'Upload Screenshot to Proceed' : 'Confirm Deposit Received'}
+                  <Icon name={(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                  {!selectedBooking.paymentProofDeposit 
+                    ? 'Upload Screenshot to Proceed' 
+                    : !depositPaymentMethod 
+                      ? 'Select Payment Method to Proceed' 
+                      : 'Confirm Deposit Received'}
                 </button>
               )}
               {selectedBooking.status === 'deposit_confirmed' && (
@@ -5138,13 +5279,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
               {selectedBooking.status === 'final_invoice_sent' && (
                 <button
-                  onClick={() => confirmFinalPayment(selectedBooking.id)}
-                  disabled={!selectedBooking.paymentProofFinal}
-                  title={!selectedBooking.paymentProofFinal ? "Please upload the payment screenshot first" : ""}
-                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${!selectedBooking.paymentProofFinal ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                  onClick={() => {
+                    if (!finalPaymentMethod) return;
+                    confirmFinalPayment(selectedBooking.id, finalPaymentMethod);
+                  }}
+                  disabled={!selectedBooking.paymentProofFinal || !finalPaymentMethod}
+                  title={!selectedBooking.paymentProofFinal ? "Please upload the payment screenshot first" : !finalPaymentMethod ? "Please select a payment method" : ""}
+                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                 >
-                  <Icon name={!selectedBooking.paymentProofFinal ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofFinal ? 'Upload Screenshot to Proceed' : 'Confirm Final Payment'}
+                  <Icon name={(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                  {!selectedBooking.paymentProofFinal 
+                    ? 'Upload Screenshot to Proceed' 
+                    : !finalPaymentMethod 
+                      ? 'Select Payment Method to Proceed' 
+                      : 'Confirm Final Payment'}
                 </button>
               )}
               {selectedBooking.status === 'final_payment_received' && (
