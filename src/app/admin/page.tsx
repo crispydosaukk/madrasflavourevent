@@ -742,7 +742,28 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
 
     const guestBreakdown = `*👥 Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n*✅ Deposit Paid:* -£${booking.deposit.toLocaleString()}\n\n*⚖️ Balance Due: £${(getTotalAmount(booking) - booking.deposit).toLocaleString()}*${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    const grandTotal = getTotalAmount(booking);
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
+    
+    const isDepositPaid = booking.depositPaid || booking.status !== 'new_enquiry';
+    const isFinalPaid = booking.finalPaymentPaid;
+    const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra;
+    
+    const totalPaid = (isDepositPaid ? booking.deposit : 0) +
+                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+                      (isExtraPaid ? extraChargesTotal : 0);
+                      
+    const remainingBalance = grandTotal - totalPaid;
+    
+    const breakdownText = `*💳 Payment Breakdown:*\n` +
+      `• Deposit (Advance Payment): £${booking.deposit.toLocaleString()} (${isDepositPaid ? 'Paid' : 'Pending'})\n` +
+      `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? 'Paid' : 'Pending'})\n` +
+      (extraChargesTotal > 0 ? `• Extras / Adjustments: £${extraChargesTotal.toLocaleString()} (${isExtraPaid ? 'Paid' : 'Pending'})\n` : '') +
+      `• Total Paid: £${totalPaid.toLocaleString()}\n` +
+      `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
+
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -1391,6 +1412,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const hallCharge = getVenueHallCharge(booking.date, booking.time);
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
+    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
     
     // Format dates
     const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
@@ -1697,14 +1719,68 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <td>Grand Total (Incl. Hall):</td>
               <td class="text-right">£${grandTotal.toLocaleString()}</td>
             </tr>
+            
+            <!-- Payment Breakdown Details -->
             <tr>
-              <td style="padding-top: 15px;">Deposit Paid:</td>
-              <td class="text-right" style="padding-top: 15px; color: #2b7a4a;">-£${booking.deposit.toLocaleString()}</td>
+              <td colspan="2" style="padding-top: 15px; padding-bottom: 5px; font-weight: bold; border-bottom: 1px solid #eee; color: #C8860A; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Payment Breakdown
+              </td>
             </tr>
             <tr>
-              <td>Balance Due:</td>
-              <td class="text-right" style="font-weight: bold; color: ${booking.finalPaymentPaid ? '#2b7a4a' : '#c86a00'}">
-                ${booking.finalPaymentPaid ? 'PAID IN FULL ✓' : `£${(grandTotal - booking.deposit).toLocaleString()}`}
+              <td style="padding-top: 8px; padding-left: 10px; color: #555;">• Deposit Paid (Advance Payment):</td>
+              <td class="text-right" style="padding-top: 8px; color: ${booking.depositPaid || booking.status !== 'new_enquiry' ? '#2b7a4a' : '#c86a00'}; font-weight: 500;">
+                ${booking.depositPaid || booking.status !== 'new_enquiry' ? `-£${booking.deposit.toLocaleString()} (Paid)` : `£${booking.deposit.toLocaleString()} (Pending)`}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-left: 10px; color: #555;">• Final Payment (Main Balance):</td>
+              <td class="text-right" style="color: ${booking.finalPaymentPaid ? '#2b7a4a' : '#c86a00'}; font-weight: 500;">
+                ${booking.finalPaymentPaid ? `-£${finalPaymentPaidAmt.toLocaleString()} (Paid)` : `£${finalPaymentPaidAmt.toLocaleString()} (Pending)`}
+              </td>
+            </tr>
+            
+            ${extraChargesTotal > 0 ? `
+            <tr>
+              <td style="padding-left: 10px; color: #555;">
+                • Extras / Adjustments:
+                <div style="font-size: 11px; color: #777; margin-left: 10px; margin-top: 2px;">
+                  ${booking.extraCharges.map(extra => `${extra.label} (+£${extra.amount.toLocaleString()})`).join(', ')}
+                </div>
+              </td>
+              <td class="text-right" style="color: ${(booking.status === 'completed' || booking.paymentProofExtra) ? '#2b7a4a' : '#c86a00'}; font-weight: 500; vertical-align: top;">
+                ${(booking.status === 'completed' || booking.paymentProofExtra) ? `-£${extraChargesTotal.toLocaleString()} (Paid)` : `£${extraChargesTotal.toLocaleString()} (Pending)`}
+              </td>
+            </tr>
+            ` : ''}
+            
+            <tr style="border-top: 1px solid #ddd;">
+              <td style="font-weight: bold; padding-top: 10px;">Total Paid:</td>
+              <td class="text-right" style="font-weight: bold; color: #2b7a4a; padding-top: 10px;">
+                £${(
+                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                ).toLocaleString()}
+              </td>
+            </tr>
+            <tr>
+              <td style="font-weight: bold; padding-bottom: 10px;">Remaining Balance Due:</td>
+              <td class="text-right" style="font-weight: bold; color: ${
+                (grandTotal - (
+                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                )) <= 0 ? '#2b7a4a' : '#c86a00'
+              }; padding-bottom: 10px;">
+                ${(grandTotal - (
+                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                )) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - (
+                  (booking.depositPaid || booking.status !== 'new_enquiry' ? booking.deposit : 0) +
+                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
+                  ((booking.status === 'completed' || booking.paymentProofExtra) ? extraChargesTotal : 0)
+                )).toLocaleString()}`}
               </td>
             </tr>
           </tbody>
@@ -4918,34 +4994,80 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
 
                   {(() => {
-                    const hallCharge = getVenueHallCharge(selectedBooking.date, selectedBooking.time);
                     const grandTotal = getTotalAmount(selectedBooking);
+                    const extraChargesTotal = (selectedBooking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                    const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
+                    
+                    const isDepositPaid = selectedBooking.depositPaid || selectedBooking.status !== 'new_enquiry';
+                    const isFinalPaid = selectedBooking.finalPaymentPaid;
+                    const isExtraPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra;
+                    
+                    const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
+                                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+                                      (isExtraPaid ? extraChargesTotal : 0);
+                                      
+                    const remainingBalance = grandTotal - totalPaid;
+
                     return (
-                      <div className="flex justify-between text-sm font-bold border-t border-gray-200 pt-2">
-                        <span className="text-gray-800">Grand Total (incl. Hall)</span>
-                        <span className="text-gray-900">£{grandTotal.toLocaleString()}</span>
+                      <div className="space-y-2 border-t border-gray-200 pt-3">
+                        <div className="flex justify-between text-sm font-bold">
+                          <span className="text-gray-800">Grand Total (incl. Hall)</span>
+                          <span className="text-gray-900">£{grandTotal.toLocaleString()}</span>
+                        </div>
+
+                        {selectedBooking.discount && (
+                          <div className="flex justify-between text-xs text-red-650">
+                            <span>Discount ({selectedBooking.discount.reason})</span>
+                            <span>-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
+                          </div>
+                        )}
+
+                        <div className="border-t border-dashed border-gray-200 mt-2 pt-2 space-y-1">
+                          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Payment Breakdown</div>
+                          
+                          {/* Deposit (Advance Payment) */}
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Deposit (Advance Payment)</span>
+                            <span className={`font-semibold ${isDepositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                              £{selectedBooking.deposit.toLocaleString()} {isDepositPaid ? '✓ Paid' : '(pending)'}
+                            </span>
+                          </div>
+
+                          {/* Final Payment (Main Balance) */}
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500">Final Payment (Main Balance)</span>
+                            <span className={`font-semibold ${isFinalPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                              £{finalPaymentPaidAmt.toLocaleString()} {isFinalPaid ? '✓ Paid' : '(pending)'}
+                            </span>
+                          </div>
+
+                          {/* Extras */}
+                          {extraChargesTotal > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Extras / Adjustments</span>
+                              <span className={`font-semibold ${isExtraPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
+                                £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : '(pending)'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Total Paid */}
+                          <div className="flex justify-between text-xs border-t border-gray-100 pt-1.5 font-semibold text-gray-700">
+                            <span>Total Paid</span>
+                            <span className="text-emerald-700 font-bold">£{totalPaid.toLocaleString()}</span>
+                          </div>
+
+                          {/* Remaining Balance Due */}
+                          <div className="flex justify-between text-sm border-t border-gray-200 pt-1.5 font-bold">
+                            <span className="text-gray-700">Remaining Balance Due</span>
+                            <span className={remainingBalance <= 0 ? 'text-emerald-700' : 'text-amber-600'}>
+                              {remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
-
-                  {selectedBooking.discount && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Discount</span>
-                      <span className="font-semibold text-red-600">-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Deposit</span>
-                    <span className={`font-semibold ${selectedBooking.depositPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                      £{selectedBooking.deposit.toLocaleString()} {selectedBooking.depositPaid ? '✓' : '(pending)'}
-                    </span>
-                  </div>
-                  <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
-                    <span className="font-semibold text-gray-700">Balance Due</span>
-                    <span className={`font-bold ${selectedBooking.finalPaymentPaid ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {selectedBooking.finalPaymentPaid ? 'Paid in full' : `£${(getTotalAmount(selectedBooking) - selectedBooking.deposit).toLocaleString()}`}
-                    </span>
-                  </div>
                 </div>
               </div>
 
