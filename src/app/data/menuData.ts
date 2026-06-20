@@ -1,197 +1,160 @@
-// ─── REAL MENU DATA ───────────────────────────────────────────────────────────
-
-export const INDIAN_MENU = {
-  name: 'Indian Menu',
-  starters: {
-    vegetarian: [
-      'Chilli Mogo', 'Chilli Paneer', 'Chilli Gobi', 'Paneer Tikka', 'Gobi 65',
-      'Aloo Tikki', 'Papdi Chat', 'Mini Gujarati Samosa', 'Mini Punjabi Samosa',
-      'Vegetable Spring Rolls', 'Cauliflower Salt & Pepper',
-    ],
-    nonVegetarian: [
-      'Chilli Chicken', 'Fish Cutlet', 'Mutton Roll', 'Chicken Tikka', 'Chicken 65',
-      'Murgh Malai Tikka', 'Lamb Seekh Kebab', 'Chicken Samosa', 'Meat Samosa',
-      'Tandoori Chicken Wings', 'Andhra Chicken 65',
-    ],
-  },
-  mains: {
-    vegetarian: [
-      'Dal Tadka', 'Dal Makhani', 'Aloo Gobi Masala', 'Kadai Paneer', 'Channa Masala',
-      'Aloo Matar', 'Karahi Mix Vegetable', 'Vegetable Jalfrezi', 'Bhindi Do Pyaza',
-      'Aubergine with Aloo', 'Methi Malai Paneer', 'Veg Korma',
-    ],
-    nonVegetarian: [
-      'Chicken Korma', 'Butter Chicken', 'Chicken Tikka Masala', 'Kadai Chicken',
-      'Chicken Saag', 'Lamb Keema with peas', 'Mutton Jalfrezi', 'Mutton Roganjosh',
-      'Mutton Kadai', 'Chicken Biryani with Bone/ Boneless',
-      'Mutton Biryani with Bone/ Boneless', 'Hyderabadi Dum Biryani with Bone/ Boneless',
-    ],
-  },
-  sundries: ['Rice - Plain, Pulao, Jeera', 'Assorted Naan Plain/ Butter'],
-  desserts: [
-    'Gulab Jamun', 'Rasmalai', 'Gajar Ka Halwa', 'Vanilla Ice-Cream', 'Kheer',
-    'Premium Dessert £1.50 Per Head',
-  ],
-  allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-};
-
-export const SRI_LANKAN_MENU = {
-  name: 'Sri Lankan Menu',
-  starters: {
-    vegetarian: [
-      'Chilli Mogo', 'Chilli Paneer', 'Chilli Gobi', 'Paneer Tikka', 'Gobi 65',
-      'Papdi Chat', 'Medu Vada', 'Vegetable Patti', 'Vegetable Samosa',
-      'Vegetable Rolls', 'Cauliflower Salt & Pepper',
-    ],
-    nonVegetarian: [
-      'Devil Chicken', 'Fish Cutlet', 'Mutton Roll', 'Chicken Tikka', 'Chicken 65',
-      'Lamb Seekh Kebab', 'Chicken Samosa', 'Meat Samosa',
-      'Tandoori chicken wings', 'Andhra chicken 65',
-    ],
-  },
-  mains: {
-    vegetarian: [
-      'Dal Fry', 'Devil Potato', 'Paneer Curry', 'Brinjal Curry', 'Bhindi Masala',
-      'Chana Masala', 'Vegetable Biryani', 'Veg Fried Rice', 'Veg Noodles',
-      'String Hopper with Sodhi & Sambal',
-    ],
-    nonVegetarian: [
-      'Nethli Puttu Kottu', 'Mutton Kottu', 'Chicken Kottu', 'Chicken Curry on Bone',
-      'Mutton Curry', 'Pangirachi', 'Chicken Biryani on Bone', 'Mutton Biryani on Bone',
-      'Hyderabadi Dum Biryani with Bone/ Boneless',
-    ],
-  },
-  sundries: ['Rice - plain, Pulao, Jeera', 'Naan Plain OR Parotta'],
-  desserts: [
-    'Gulab Jamun', 'Rasmalai', 'Payasam', 'Vanilla Ice-Cream', 'Kesari',
-    'Fruit salad', 'Premium dessert £1.50 per head',
-  ],
-  allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-};
-
-export const LIVE_COUNTER_PACKAGE = {
-  name: 'Live Counter Package',
-  srilankanSouthIndian: [
-    { name: 'Live Kottu', price: 5.00 },
-    { name: 'Live Puttu', price: 3.00 },
-    { name: 'Live Hopper', price: 3.00 },
-    { name: 'Live Dosa & Uthapam', price: 5.00 },
-    { name: 'Live Poori Bhaji', price: 4.00 },
-    { name: 'Live Pani Puri', price: 3.00 },
-    { name: 'Live Fresh Coconut Water', price: 5.00 },
-    { name: 'Live Paan Counter (100pcs)', price: 350.00 },
-    { name: 'Welcome Drink', price: 2.00 },
-  ],
-  northIndian: [
-    { name: 'Live Chole Bhature', price: 5.00 },
-    { name: 'Live Poori Aloo Sabji', price: 4.00 },
-    { name: 'Live Pani Puri', price: 3.00 },
-    { name: 'Live Aloo Tikki Chat', price: 3.00 },
-    { name: 'Live Pav Bhaji', price: 4.00 },
-    { name: 'Live Paan Counter (100pcs)', price: 350.00 },
-    { name: 'Welcome Drink', price: 2.00 },
-  ],
-  extras: [
-    { name: 'Full Music Setup with Lighting', price: 350.00, note: 'DJ Optional If You Required + £250.00' },
-    { name: '3D Led Dance Floor', price: 250.00 },
-    { name: '4K LED Screen for Backdrop', price: 750.00 },
-    { name: '360 Camera', price: 300.00 },
-    { name: 'Candy Floss for Kids Birthday', price: 100.00 },
-  ],
-};
-
-export const BANQUET_PACKAGES = [
+export const NEW_PACKAGES = [
   {
-    id: 'basic',
-    name: 'Basic Package',
-    pricePerPerson: 25,
-    tag: 'Limited Time',
-    minGuests: 201,
-    maxGuests: 300,
-    guestLabel: 'Minimum 201-300 Guests',
-    starters: { veg: 2, nonVeg: 1 },
-    mains: { veg: 2, nonVeg: 1 },
-    desserts: ['1 Indian Sweet Dish'],
-    drinks: [],
-    extras: [],
-    color: '#6B7280',
-  },
-  {
-    id: 'classic',
-    name: 'Classic Package',
-    pricePerPerson: 30,
-    tag: '',
-    minGuests: 101,
-    maxGuests: 200,
-    guestLabel: 'Minimum 101-200 Guests',
-    starters: { veg: 2, nonVeg: 2 },
-    mains: { veg: 2, nonVeg: 2 },
-    desserts: ['1 Indian Sweet Dish'],
-    drinks: ['1 Soft Drink & 1 Juice'],
-    extras: [],
-    color: '#92400E',
-  },
-  {
-    id: 'silver',
-    name: 'Silver Package',
-    pricePerPerson: 35,
-    tag: '',
+    id: 'package12',
+    name: 'Bronze Package',
+    pricePerPerson: 12,
     minGuests: 50,
-    maxGuests: 100,
-    guestLabel: 'Minimum 50-100 Guests',
-    starters: { veg: 2, nonVeg: 3 },
-    mains: { veg: 2, nonVeg: 3 },
-    desserts: ['1 Indian Sweet Dish', '1 Petit Four'],
-    drinks: ['2 Soft Drink & 1 Juice', 'Bottled Mineral Water'],
-    extras: [],
-    color: '#6B7280',
+    guestLabel: '(Minimum 50 Pax)',
+    tag: 'Additional 20% VAT Tax',
+    items: [
+      '2 Staters',
+      '1 Veg Mains',
+      '1 Paneer Mains',
+      '1 Rice Or Noodles',
+      '1 Dessert',
+      '1 Bread',
+    ],
+    complimentary: 'Accompaniments like Papad, Pickle, Salad & Raitha will be Complimentary.',
+    color: '#E06D43',
   },
   {
-    id: 'gold',
+    id: 'package14',
+    name: 'Silver Package',
+    pricePerPerson: 14,
+    minGuests: 50,
+    guestLabel: '(Minimum 50 Pax)',
+    tag: 'Additional 20% VAT Tax',
+    items: [
+      '3 Staters',
+      '1 Veg Mains',
+      '1 Dhal',
+      '1 Paneer Mains',
+      '1 Rice Or Noodles',
+      '1 Dessert',
+      '1 Bread',
+    ],
+    complimentary: 'Accompaniments like Papad, Pickle, Salad & Raitha will be Complimentary.',
+    color: '#E06D43',
+  },
+  {
+    id: 'package17',
     name: 'Gold Package',
-    pricePerPerson: 40,
-    tag: '',
-    minGuests: null,
-    maxGuests: null,
-    guestLabel: '',
-    starters: { veg: 3, nonVeg: 3 },
-    mains: { veg: 3, nonVeg: 3 },
-    desserts: ['1 Indian Sweet Dish', '1 Petit Four', '1 Ice-cream'],
-    drinks: ['Bottled Mineral Water', '3 Soft Drink & 1 Juice', '1 Welcome Drink'],
-    extras: [],
-    color: '#ED1C24',
+    pricePerPerson: 17,
+    minGuests: 50,
+    guestLabel: '(Minimum 50 Pax)',
+    tag: 'Additional 20% VAT Tax',
+    items: [
+      '3 Staters',
+      '2 Veg Mains',
+      '1 Dhal',
+      '1 Paneer Mains',
+      '1 Rice Or Noodles',
+      '1 Dessert',
+      '1 Bread',
+    ],
+    complimentary: 'Accompaniments like Papad, Pickle, Salad & Raitha will be Complimentary.',
+    color: '#E06D43',
   },
   {
-    id: 'platinum',
+    id: 'package20',
     name: 'Platinum Package',
-    pricePerPerson: 45,
-    tag: '',
-    minGuests: null,
-    maxGuests: null,
-    guestLabel: '',
-    starters: { veg: 3, nonVeg: 4 },
-    mains: { veg: 3, nonVeg: 4 },
-    desserts: ['1 Indian Sweet Dish', '2 Petit Fours', 'Fruit Platter'],
-    drinks: ['Bottled Mineral Water', '3 Soft Drink & 2 Juice', '1 Welcome Drink', '1 Glass of Prosecco'],
-    extras: [],
-    color: '#1F2937',
+    pricePerPerson: 20,
+    minGuests: 50,
+    guestLabel: '(Minimum 50 Pax)',
+    tag: 'Additional 20% VAT Tax',
+    items: [
+      '3 Staters',
+      '2 Veg Mains',
+      '1 Dhal',
+      '2 Paneer Mains',
+      '2 Rice Or Noodles',
+      '1 Dessert',
+      '1 Bread',
+    ],
+    complimentary: 'Accompaniments like Papad, Pickle, Salad & Raitha will be Complimentary.',
+    color: '#E06D43',
   },
   {
-    id: 'madrasflavours',
-    name: 'Madras Flavours Package',
-    pricePerPerson: 50,
-    tag: 'Grand Red Carpet Entrance',
-    minGuests: null,
-    maxGuests: null,
-    guestLabel: '',
-    canapes: { veg: 2, nonVeg: 2 },
-    starters: { veg: 4, nonVeg: 4 },
-    mains: { veg: 4, nonVeg: 4 },
-    desserts: ['Trio of Dessert', 'Assorted Icecream', 'Fruit Platter'],
-    drinks: ['Bottled Mineral Water', '3 Soft Drinks & 2 Juice', '1 Welcome Drink', '1 Glass of Prosecco'],
-    extras: [],
-    color: '#7C3AED',
-  },
+    id: 'package22',
+    name: 'Diamond Package',
+    pricePerPerson: 22,
+    minGuests: 50,
+    guestLabel: '(Minimum 50 Pax)',
+    tag: 'Additional 20% VAT Tax',
+    items: [
+      '3 Staters(live stater Opt)',
+      '2 Veg Mains',
+      '2 Paneer Mains',
+      '2 Rice Or Noodles',
+      '2 Dessert',
+      'Live Poori',
+    ],
+    complimentary: 'Accompaniments like Papad, Pickle, Salad & Raitha will be Complimentary.',
+    color: '#E06D43',
+  }
+];
+
+export const MENU_CATEGORIES = {
+  staters: [
+    'GOBI 65', 'GOBI MANCHURIAN DRY', 'VEG MANCHURIAN DRY', 'CHILLY PANEER DRY',
+    'CHILLI GOBI', 'VEG SPRING ROLL', 'COCKTAIL SAMOSA', 'PANEER TIKKA',
+    'CHILLY MUSHROOM', 'PEPPER MUSHROOM', 'CHILLY GARLIC POTATO', 'CHILLY MOGO',
+    'PLAIN MOGO CHIPS', 'FRIED DOSA CHIPS', 'FRENCH FRIES'
+  ],
+  vegMains: [
+    'MIX VEG CURRY', 'VEG KURMA', 'NAVARATHNA KURMA', 'SUBZ HARIYALI',
+    'ALOO GOBI KA MASALA', 'ALOO GOBI SHIMLAMIRCH', 'ALOO BHAIGAN', 'BHINDI MASALA',
+    'VEG JALFREZE', 'ALOO MUTTER MASALA', 'ALOO JEERA', 'SUBZ SHAHI KURMA',
+    'BHAIGAN KA BARTHA', 'ALOO METHI', 'KADAI SUBZI'
+  ],
+  riceAndNoodles: [
+    'VEG PULAO', 'PEAS PULAO', 'JEERA CHAWAL', 'VEG DHUM BIRYANI', 'VEG FRIED RICE',
+    'SZECHWAN FRIED RICE', 'VEG NOODLES', 'SZECHWAN NOODLES', 'TOMATO RICE',
+    'LEMON RICE', 'TAMARIND RICE', 'BHAGARA CHAWAL', 'PLAIN BASMATHI RICE', 'CURD RICE'
+  ],
+  paneerMains: [
+    'PANEER BUTTER MASALA', 'PANEER TIKKA MASALA', 'SHAHI PANNER', 'KADAI PANEER',
+    'MUTTER PANEER', 'PANEER KURMA', 'METHI MALAI PANEER', 'PANEER TIKKA',
+    'PALAK PANEER', 'CHILLY PANEER GRAVY', 'PANEER MANCHURIAN GRAVY', 'PANEER KOFTHA CURRY'
+  ],
+  breads: [
+    'NAAN', 'ROTI', 'CHAPATHI', 'POORI (MINIMUM 50 PAX)', 'GARLIC NAAN', 'BULLET NAAN',
+    'ALL THE ABOVE AVAILABLE WITH CHOICE OF PLAIN AND WITH BUTTER'
+  ],
+  dhal: [
+    'DHAL TADKA', 'LASOONI DHAL', 'TAMATAR DHAL', 'DHAL PALAK', 'METHI DHAL',
+    'AAM KI DHAL', 'DHAL MAKHNI', 'CHANNA MASALA'
+  ],
+  dessert: [
+    'GULAB JAMOON', 'RASMALAI', 'GAJAR KA HALWA', 'SOOJI KA HALWA', 'PINEAPPLE SHEERA',
+    'VERMICELLI KHEER', 'RICE KHEER', 'BEETROOT HALWA'
+  ]
+};
+
+export const LIVE_DOSA_PARTY_MENU = {
+  title: 'OUTDOOR LIVE DOSA PARTY MENU',
+  pricing: [
+    'Monday to Friday £11.00 (Minimum 35 Persons)',
+    'Sat, Sun & Bank Holiday £12.00 (Minimum 40 Persons)',
+    '"Upgrade to Palm Plates and Party Green" for additional £0.99'
+  ],
+  items: [
+    'Plain Dosa (LIVE)', 'Masala Dosa (LIVE)', 'Onion Chilli Uthappam (LIVE)',
+    'Onion Dosa (LIVE)', 'Ghee Dosa (LIVE)', 'Podi Dosa (LIVE)',
+    'Idly (or) Veg Biryani', 'Medhu Vada (LIVE)', 'Coconut Chutney',
+    'Coriander Chutney', 'Sambar'
+  ]
+};
+
+export const EXTRAS = [
+  { name: 'Crispy Bhajia', price: 2.00 },
+  { name: 'Pav Bhaji', price: 2.00 },
+  { name: 'Chilli Garlic Mogo', price: 2.00 },
+  { name: 'Chilli Paneer', price: 2.00 },
+  { name: 'Choley Batura', price: 3.00 },
+  { name: 'Gulab Jamun (1 pc per person)', price: 1.00 },
+  { name: 'Rasmalai (per pc)', price: 1.00 },
+  { name: 'Pineapple or Banana Kesari (per person)', price: 1.00 }
 ];
 
 export const VENUE_HALL_CHARGES = [

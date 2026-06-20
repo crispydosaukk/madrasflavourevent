@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
+import { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import AccessControl from '@/components/admin/AccessControl';
 
 // --- MOCK FIREBASE FOR PROTOTYPE ---
@@ -370,36 +370,36 @@ export default function AdminPage() {
 
   // Editable banquet packages
   const [editableBanquetPackages, setEditableBanquetPackages] = useState(
-    BANQUET_PACKAGES.map(pkg => ({ ...pkg, desserts: [...pkg.desserts], drinks: [...pkg.drinks] }))
+    NEW_PACKAGES.map(pkg => ({ ...pkg, desserts: [], drinks: [], starters: {veg: 0, nonVeg: 0}, mains: {veg: 0, nonVeg: 0} }))
   );
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
-  const [editingPackageData, setEditingPackageData] = useState<typeof BANQUET_PACKAGES[0] | null>(null);
+  const [editingPackageData, setEditingPackageData] = useState<any | null>(null);
 
   // Editable Indian menu
   const [editableIndianMenu, setEditableIndianMenu] = useState({
-    vegStarters: [...INDIAN_MENU.starters.vegetarian],
-    nonVegStarters: [...INDIAN_MENU.starters.nonVegetarian],
-    vegMains: [...INDIAN_MENU.mains.vegetarian],
-    nonVegMains: [...INDIAN_MENU.mains.nonVegetarian],
-    sundries: [...INDIAN_MENU.sundries],
-    desserts: [...INDIAN_MENU.desserts],
+    vegStarters: [] as string[],
+    nonVegStarters: [] as string[],
+    vegMains: [] as string[],
+    nonVegMains: [] as string[],
+    sundries: [] as string[],
+    desserts: [] as string[],
   });
 
   // Editable Sri Lankan menu
   const [editableSLMenu, setEditableSLMenu] = useState({
-    vegStarters: [...SRI_LANKAN_MENU.starters.vegetarian],
-    nonVegStarters: [...SRI_LANKAN_MENU.starters.nonVegetarian],
-    vegMains: [...SRI_LANKAN_MENU.mains.vegetarian],
-    nonVegMains: [...SRI_LANKAN_MENU.mains.nonVegetarian],
-    sundries: [...SRI_LANKAN_MENU.sundries],
-    desserts: [...SRI_LANKAN_MENU.desserts],
+    vegStarters: [] as string[],
+    nonVegStarters: [] as string[],
+    vegMains: [] as string[],
+    nonVegMains: [] as string[],
+    sundries: [] as string[],
+    desserts: [] as string[],
   });
 
   // Editable live counter
   const [editableLiveCounter, setEditableLiveCounter] = useState({
-    srilankanSouthIndian: LIVE_COUNTER_PACKAGE.srilankanSouthIndian.map(i => ({ ...i })),
-    northIndian: LIVE_COUNTER_PACKAGE.northIndian.map(i => ({ ...i })),
-    extras: LIVE_COUNTER_PACKAGE.extras.map(i => ({ ...i })),
+    srilankanSouthIndian: [] as any[],
+    northIndian: [] as any[],
+    extras: [] as any[],
   });
 
   // Editable venue/table/kids
@@ -464,7 +464,7 @@ export default function AdminPage() {
     }
   };
 
-  const startEditPackage = (pkg: typeof BANQUET_PACKAGES[0]) => {
+  const startEditPackage = (pkg: any) => {
     setEditingPackageId(pkg.id);
     setEditingPackageData({ ...pkg, desserts: [...pkg.desserts], drinks: [...pkg.drinks] });
   };
@@ -478,18 +478,16 @@ export default function AdminPage() {
 
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
     let text = `Hi ${customerName}, here are our *${menuType}* options from Madras Flavours Events:\n\n`;
-    if (menuType === 'Indian Menu') {
-      text += `🥗 *Vegetarian Starters:*\n${(editableIndianMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍗 *Non-Veg Starters:*\n${(editableIndianMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍛 *Vegetarian Mains:*\n${(editableIndianMenu.vegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍖 *Non-Veg Mains:*\n${(editableIndianMenu.nonVegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍮 *Desserts:*\n${(editableIndianMenu.desserts || []).map(i => `• ${i}`).join('\n')}\n\n`;
-    } else if (menuType === 'Sri Lankan Menu') {
-      text += `🥗 *Vegetarian Starters:*\n${(editableSLMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍗 *Non-Veg Starters:*\n${(editableSLMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍛 *Vegetarian Mains:*\n${(editableSLMenu.vegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍖 *Non-Veg Mains:*\n${(editableSLMenu.nonVegMains || []).map(i => `• ${i}`).join('\n')}\n\n`;
-      text += `🍮 *Desserts:*\n${(editableSLMenu.desserts || []).map(i => `• ${i}`).join('\n')}\n\n`;
+    if (menuType === 'Packages') {
+      text += editableBanquetPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}\n${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
+    } else if (menuType === 'Menu Categories') {
+      text += `🥗 *Staters:* ${(MENU_CATEGORIES.staters || []).join(', ')}\n\n`;
+      text += `🍛 *Veg Mains:* ${(MENU_CATEGORIES.vegMains || []).join(', ')}\n\n`;
+      text += `🍚 *Rice & Noodles:* ${(MENU_CATEGORIES.riceAndNoodles || []).join(', ')}\n\n`;
+      text += `🧀 *Paneer Mains:* ${(MENU_CATEGORIES.paneerMains || []).join(', ')}\n\n`;
+      text += `🥖 *Breads:* ${(MENU_CATEGORIES.breads || []).join(', ')}\n\n`;
+      text += `🍲 *Dhal:* ${(MENU_CATEGORIES.dhal || []).join(', ')}\n\n`;
+      text += `🍮 *Dessert:* ${(MENU_CATEGORIES.dessert || []).join(', ')}\n\n`;
     } else if (menuType === 'Venue Hall Charges') {
       text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
       text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
@@ -498,12 +496,11 @@ export default function AdminPage() {
     } else if (menuType === 'Kids Pricing') {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
-      text += `*NOTE:* Minimum Number of Guests will be charged as agreed. As per our policy and food safety, we don't allow any food takeaway from Banquet Venue.\n\n`;
     } else if (menuType === 'Extras') {
-      text += (editableLiveCounter.extras || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
+      text += (EXTRAS || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
     }
     
-    if (menuType.includes('Menu') || menuType === 'Extras') {
+    if (menuType.includes('Menu') || menuType === 'Extras' || menuType === 'Packages') {
       text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
     } else {
       text += `Please let us know if you have any questions or would like to proceed with booking! 🙏`;
@@ -614,7 +611,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
-    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+    const nonPreset = (booking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
     const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
     const extrasList = nonPreset.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
 
@@ -2597,30 +2594,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </button>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                            {'canapes' in pkg && pkg.canapes && (
-                              <div className="bg-gray-50 rounded-lg p-2.5">
-                                <div className="text-xs text-gray-400 mb-0.5">Canapés</div>
-                                <div className="text-xs font-medium text-gray-700">{pkg.canapes.veg}V · {pkg.canapes.nonVeg}NV</div>
-                              </div>
-                            )}
                             <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Starters</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.starters.veg}V · {pkg.starters.nonVeg}NV</div>
+                              <div className="text-xs text-gray-400 mb-0.5">Items Included</div>
+                              <div className="text-xs font-medium text-gray-700">{(pkg.items || []).length} items</div>
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Mains</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.mains.veg}V · {pkg.mains.nonVeg}NV</div>
-                            </div>
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Desserts</div>
-                              <div className="text-xs font-medium text-gray-700">{pkg.desserts.length} item{pkg.desserts.length !== 1 ? 's' : ''}</div>
-                            </div>
-                            {pkg.drinks.length > 0 && (
-                              <div className="bg-gray-50 rounded-lg p-2.5">
-                                <div className="text-xs text-gray-400 mb-0.5">Drinks</div>
-                                <div className="text-xs font-medium text-gray-700">{pkg.drinks.length} item{pkg.drinks.length !== 1 ? 's' : ''}</div>
-                              </div>
-                            )}
                           </div>
                           <div className="border-t border-gray-100 pt-3">
                             <p className="text-xs text-gray-500 mb-2 font-medium">📱 Send this package to a customer via WhatsApp:</p>
@@ -2828,7 +2805,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="flex flex-wrap gap-2">
                       {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
                         <a key={b.id}
-                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Madras Flavours Events:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
+                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Madras Flavours Events:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${EXTRAS.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                           style={{ background: '#25D366', color: 'white' }}>
@@ -3988,7 +3965,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           let selectedPkgName = '';
                           let baseAmount = 0;
 
-                          const foundExtra = editableLiveCounter.extras.find(ex => ex.name === val);
+                          const foundExtra = EXTRAS.find(ex => ex.name === val);
 
                           if (val === 'custom') {
                             selectedPkgName = 'Custom Package';
@@ -4068,7 +4045,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <option value="Kids Pricing">Kids Pricing</option>
                         </optgroup>
                         <optgroup label="Extras">
-                          {(editableLiveCounter?.extras || []).map(extra => (
+                          {EXTRAS.map(extra => (
                             <option key={extra.name} value={extra.name}>
                               {extra.name} (£{extra.price})
                             </option>
@@ -4084,7 +4061,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="mt-3 border-t border-amber-200/50 pt-3">
                       <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
                       <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
-                        {(editableLiveCounter?.extras || []).map((extra) => {
+                        {EXTRAS.map((extra) => {
                           const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
                           return (
                             <label key={extra.name} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50 p-1.5 rounded transition-colors">
@@ -4326,7 +4303,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n🎪 *Extras Available:*\n${(editableLiveCounter?.extras || []).map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n🎪 *Extras Available:*\n${EXTRAS.map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -4598,11 +4575,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
                 <div className="border border-teal-200 rounded-xl p-4 bg-teal-50">
                   <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Adjustments / Extra Charges</div>
-                  {selectedBooking.extraCharges.some(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label)) && (
+                  {selectedBooking.extraCharges.some(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label)) && (
                     <div className="space-y-2 mb-3">
                       {selectedBooking.extraCharges
                         .map((charge, idx) => ({ charge, idx }))
-                        .filter(({ charge }) => !charge.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === charge.label))
+                        .filter(({ charge }) => !charge.isPreset && !EXTRAS.some(preset => preset.name === charge.label))
                         .map(({ charge, idx }) => (
                           <div key={idx} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-teal-100">
                             <span className="text-sm text-gray-700">{charge.label}</span>
@@ -5153,7 +5130,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </div>
               )}
               {selectedBooking.status === 'event_completed' && (() => {
-                const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !(editableLiveCounter?.extras || []).some(preset => preset.name === c.label));
+                const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
                 const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
                 const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
                 
