@@ -3,11 +3,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AccessControl from '@/components/admin/AccessControl';
+
+// --- MOCK FIREBASE FOR PROTOTYPE ---
+const db = {};
+const doc = (db: any, ...args: any[]) => args.join('/');
+const setDoc = async (...args: any[]) => {};
+const deleteDoc = async (...args: any[]) => {};
+const signOut = async (...args: any[]) => {};
+const auth = {};
+const signInWithEmailAndPassword = async (auth: any, e: string, p: string) => {
+  if (e === 'admin@madrasflavoursevents.com' && p === 'admin') return true;
+  throw new Error('Invalid credentials');
+};
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -290,62 +298,14 @@ export default function AdminPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    const q = query(collection(db, 'booking_requests'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const liveBookings: Booking[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.name || 'Unknown',
-          email: data.email || 'N/A',
-          phone: data.phone || 'N/A',
-          eventType: data.eventType || 'N/A',
-          date: data.date || 'N/A',
-          time: data.timeOfDay || 'N/A',
-          guests: data.guests || 0,
-          adults: data.adults ?? undefined,
-          kids4to10: data.kids4to10 ?? 0,
-          kidsUnder4: data.kidsUnder4 ?? 0,
-          status: data.status || 'new_enquiry',
-          notes: data.message || '',
-          baseAmount: data.baseAmount || 0,
-          deposit: data.deposit || 0,
-          depositPaid: data.depositPaid || false,
-          finalPaymentPaid: data.finalPaymentPaid || false,
-          package: data.package || 'Not Selected',
-          selectedMenu: data.selectedMenu,
-          extraCharges: data.extraCharges || [],
-          paymentProofDeposit: data.paymentProofDeposit,
-          paymentProofFinal: data.paymentProofFinal,
-          paymentProofExtra: data.paymentProofExtra,
-          paymentMethodDeposit: data.paymentMethodDeposit,
-          paymentMethodFinal: data.paymentMethodFinal,
-          discount: data.discount,
-          discountRequest: data.discountRequest,
-          enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          dueDate: (() => {
-            if (data.dueDate) return data.dueDate;
-            if (data.date && data.date !== 'N/A') {
-              const evDate = new Date(data.date);
-              const today = new Date();
-              evDate.setDate(evDate.getDate() - 14);
-              return (evDate < today ? today : evDate).toISOString().split('T')[0];
-            }
-            return '';
-          })(),
-          updatedAt: data.updatedAt,
-          createdAt: data.createdAt,
-        } as Booking;
-      });
-      setBookings(liveBookings);
-    });
-    return () => unsubscribe();
+    // Prototype mode: use SAMPLE_BOOKINGS local data only
+    setBookings(SAMPLE_BOOKINGS);
   }, []);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterEvent, setFilterEvent] = useState<string>('all');
   const [loggedIn, setLoggedIn] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loginForm, setLoginForm] = useState({ email: 'admin@madrasflavoursevents.com', password: 'admin' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
@@ -353,57 +313,11 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          // Query by uid field (not document ID, since we use addDoc)
-          const usersQuery = query(collection(db, 'users'), where('uid', '==', user.uid));
-          const usersSnap = await getDocs(usersQuery);
-
-          if (!usersSnap.empty) {
-            // Found a managed user document
-            const userData = usersSnap.docs[0].data();
-            let roleName = 'Staff';
-            if (userData.roleId) {
-              const roleDoc = await getDoc(doc(db, 'roles', userData.roleId));
-              if (roleDoc.exists()) {
-                roleName = roleDoc.data().name || 'Staff';
-                const rolePermIds: string[] = roleDoc.data().permissionIds || [];
-                // Resolve permission IDs → title strings for sidebar filtering
-                const permTitles: string[] = [];
-                for (const permId of rolePermIds) {
-                  const permDoc = await getDoc(doc(db, 'permissions', permId));
-                  if (permDoc.exists()) {
-                    permTitles.push(permDoc.data().title);
-                  }
-                }
-                setUserPermissions(permTitles);
-              } else {
-                setUserPermissions([]); // Role doc missing
-              }
-            } else {
-              setUserPermissions([]); // No role assigned
-            }
-            setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '', role: roleName });
-          } else {
-            // No user doc found → original super admin (honeymoonadmin)
-            setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
-            setUserPermissions('all');
-          }
-        } catch (e) {
-          console.error("Error fetching permissions:", e);
-          setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
-          setUserPermissions([]);
-        }
-        setLoggedIn(true);
-      } else {
-        setLoggedIn(false);
-        setCurrentUser(null);
-        setUserPermissions([]);
-      }
-      setLoadingAuth(false);
-    });
-    return () => unsubscribe();
+    // Prototype mode: ready for login, setup Super Admin permissions
+    setLoggedIn(false);
+    setCurrentUser({ name: 'Prototype Admin', email: 'admin@madrasflavoursevents.com', role: 'Super Admin' });
+    setUserPermissions('all');
+    setLoadingAuth(false);
   }, []);
   const [calendarMonth, setCalendarMonth] = useState(4);
   const [calendarYear] = useState(2026);
@@ -428,57 +342,20 @@ export default function AdminPage() {
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [blockDateInput, setBlockDateInput] = useState('');
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
-      const dates = snapshot.docs.map(doc => doc.id);
-      setBlockedDates(dates.sort());
-    });
-    return () => unsubscribe();
-  }, []);
-
   const [bankDetails, setBankDetails] = useState({
-    accountName: 'Honeymoon Events Ltd',
+    accountName: 'Madras Flavours Events Ltd',
     sortCode: '20-00-00',
     accountNumber: '12345678'
   });
 
-  useEffect(() => {
-    return onSnapshot(doc(db, 'site_data', 'bank_details'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setBankDetails({
-          accountName: data.accountName || 'Honeymoon Events Ltd',
-          sortCode: data.sortCode || '20-00-00',
-          accountNumber: data.accountNumber || '12345678'
-        });
-      }
-    });
-  }, []);
-
   const [venueDetails, setVenueDetails] = useState({
-    venueName: 'Honeymoon Banquet Hall',
+    venueName: 'Madras Flavours Banquet Hall',
     maxCapacity: '500',
-    contactEmail: 'hello@honeymoon.com',
+    contactEmail: 'hello@madrasflavoursevents.com',
     phone: '+44 7700 900000',
     whatsapp: '+447700900000',
     address: '123 Event Plaza, London, UK'
   });
-
-  useEffect(() => {
-    return onSnapshot(doc(db, 'site_data', 'venue_details'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setVenueDetails({
-          venueName: data.venueName || 'Honeymoon Banquet Hall',
-          maxCapacity: data.maxCapacity || '500',
-          contactEmail: data.contactEmail || 'hello@honeymoon.com',
-          phone: data.phone || '+44 7700 900000',
-          whatsapp: data.whatsapp || '+447700900000',
-          address: data.address || '123 Event Plaza, London, UK'
-        });
-      }
-    });
-  }, []);
 
   const [pricingDetails, setPricingDetails] = useState({
     depositPercentage: 30,
@@ -486,20 +363,6 @@ export default function AdminPage() {
     weekdayRate: 350,
     weekendRate: 550
   });
-
-  useEffect(() => {
-    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setPricingDetails({
-          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
-          minimumBookingHours: data.minimumBookingHours || 4,
-          weekdayRate: data.weekdayRate || 350,
-          weekendRate: data.weekendRate || 550
-        });
-      }
-    });
-  }, []);
 
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   type AdminMenuTab = 'banquet' | 'indian' | 'srilankan' | 'live';
@@ -550,40 +413,7 @@ export default function AdminPage() {
   const [newLiveItemName, setNewLiveItemName] = useState('');
   const [newLiveItemPrice, setNewLiveItemPrice] = useState('');
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.INDIAN_MENU) {
-          setEditableIndianMenu({
-            vegStarters: data.INDIAN_MENU.starters?.vegetarian || [],
-            nonVegStarters: data.INDIAN_MENU.starters?.nonVegetarian || [],
-            vegMains: data.INDIAN_MENU.mains?.vegetarian || [],
-            nonVegMains: data.INDIAN_MENU.mains?.nonVegetarian || [],
-            sundries: data.INDIAN_MENU.sundries || [],
-            desserts: data.INDIAN_MENU.desserts || [],
-          });
-        }
-        if (data.SRI_LANKAN_MENU) {
-          setEditableSLMenu({
-            vegStarters: data.SRI_LANKAN_MENU.starters?.vegetarian || [],
-            nonVegStarters: data.SRI_LANKAN_MENU.starters?.nonVegetarian || [],
-            vegMains: data.SRI_LANKAN_MENU.mains?.vegetarian || [],
-            nonVegMains: data.SRI_LANKAN_MENU.mains?.nonVegetarian || [],
-            sundries: data.SRI_LANKAN_MENU.sundries || [],
-            desserts: data.SRI_LANKAN_MENU.desserts || [],
-          });
-        }
-        if (data.LIVE_COUNTER_PACKAGE) setEditableLiveCounter(data.LIVE_COUNTER_PACKAGE);
-        if (data.BANQUET_PACKAGES) setEditableBanquetPackages(data.BANQUET_PACKAGES);
-        if (data.VENUE_HALL_CHARGES) setEditableVenueCharges(data.VENUE_HALL_CHARGES);
-        if (data.TABLE_SERVICE) setEditableTableService(data.TABLE_SERVICE);
-        if (data.KIDS_PRICING) setEditableKidsPricing(data.KIDS_PRICING);
-        if (data.DRY_HIRE_PRICES) setEditableDryHirePrices(data.DRY_HIRE_PRICES);
-      }
-    });
-    return () => unsub();
-  }, []);
+
 
   const [isSavingMenus, setIsSavingMenus] = useState(false);
   const saveAllMenusToDatabase = async () => {
@@ -647,7 +477,7 @@ export default function AdminPage() {
   };
 
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
-    let text = `Hi ${customerName}, here are our *${menuType}* options from Honeymoon:\n\n`;
+    let text = `Hi ${customerName}, here are our *${menuType}* options from Madras Flavours Events:\n\n`;
     if (menuType === 'Indian Menu') {
       text += `🥗 *Vegetarian Starters:*\n${(editableIndianMenu.vegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
       text += `🍗 *Non-Veg Starters:*\n${(editableIndianMenu.nonVegStarters || []).map(i => `• ${i}`).join('\n')}\n\n`;
@@ -710,7 +540,7 @@ export default function AdminPage() {
 
     return `Hi ${booking.name.split(' ')[0]},
 
-Thank you so much for booking with Honeymoon Events! 🎊 Your event was a success and your booking is now fully completed.
+Thank you so much for booking with Madras Flavours Events! 🎊 Your event was a success and your booking is now fully completed.
 
 *📝 Event Summary:*
 • Event: ${booking.eventType}
@@ -780,7 +610,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Honeymoon Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -790,7 +620,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
 
     return `Hi ${booking.name.split(' ')[0]},
 
-Thank you for celebrating with us at Honeymoon Events! 🎉 We hope you had a fantastic time.
+Thank you for celebrating with us at Madras Flavours Events! 🎉 We hope you had a fantastic time.
 
 There were some additional adjustments/services added during your event:
 ${extrasList}
@@ -817,7 +647,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       setLoginError('');
     } catch (error) {
       console.error(error);
-      setLoginError('Invalid credentials or user not found in Firebase Authentication.');
+      setLoginError('Invalid credentials. For this prototype, use admin@madrasflavoursevents.com / admin');
     } finally {
       setIsLoggingIn(false);
     }
@@ -1448,7 +1278,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
 
     // Construct logo source (ensure it points to the absolute path of the domain)
-    const logoUrl = window.location.origin + '/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png';
+    const logoUrl = window.location.origin + '/assets/images/logomf.png';
 
     // Build the proof screenshots section
     let screenshotsHTML = '';
@@ -1516,7 +1346,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            border-bottom: 2px solid #C8860A;
+            border-bottom: 2px solid #ED1C24;
             padding-bottom: 20px;
             margin-bottom: 30px;
           }
@@ -1543,7 +1373,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           }
           .details-card h3 {
             margin: 0 0 10px 0;
-            color: #C8860A;
+            color: #ED1C24;
             font-size: 15px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -1603,9 +1433,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           .grand-total {
             font-size: 16px;
             font-weight: 700;
-            color: #C8860A;
-            border-top: 2px solid #C8860A !important;
-            border-bottom: 2px solid #C8860A !important;
+            color: #ED1C24;
+            border-top: 2px solid #ED1C24 !important;
+            border-bottom: 2px solid #ED1C24 !important;
             padding: 10px !important;
           }
           .proof-container {
@@ -1664,7 +1494,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <p>Booking Reference: <strong>#${booking.id}</strong></p>
             <p>Enquiry Date: ${formattedEnquiryDate}</p>
           </div>
-          <img class="logo" src="${logoUrl}" alt="Honeymoon Events Logo" />
+          <img class="logo" src="${logoUrl}" alt="Madras Flavours Events Logo" />
         </div>
 
         <div class="grid-2">
@@ -1751,7 +1581,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             
             <!-- Payment Breakdown Details -->
             <tr>
-              <td colspan="2" style="padding-top: 15px; padding-bottom: 5px; font-weight: bold; border-bottom: 1px solid #eee; color: #C8860A; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+              <td colspan="2" style="padding-top: 15px; padding-bottom: 5px; font-weight: bold; border-bottom: 1px solid #eee; color: #ED1C24; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
                 Payment Breakdown
               </td>
             </tr>
@@ -1834,7 +1664,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         ${screenshotsHTML}
 
         <div class="footer-note">
-          Thank you for choosing Honeymoon Events. If you have any questions regarding this invoice, please contact us.
+          Thank you for choosing Madras Flavours Events. If you have any questions regarding this invoice, please contact us.
         </div>
 
         <script>
@@ -1961,7 +1791,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   if (loadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A0F00 0%, #2C1A00 50%, #3D2800 100%)' }}>
-        <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#C8860A] border-t-transparent" />
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#ED1C24] border-t-transparent" />
       </div>
     );
   }
@@ -1971,14 +1801,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ background: 'linear-gradient(135deg, #1A0F00 0%, #2C1A00 50%, #3D2800 100%)' }}>
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-20 w-64 h-64 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #F0A830, transparent)' }} />
-          <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #C8860A, transparent)' }} />
+          <div className="absolute top-20 left-20 w-64 h-64 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #F5A623, transparent)' }} />
+          <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #ED1C24, transparent)' }} />
         </div>
         <div className="relative bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
           <div className="flex flex-col items-center mb-6">
             <img
-              src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-              alt="Honeymoon logo"
+              src="/assets/images/logomf.png"
+              alt="Madras Flavours Events logo"
               style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
               className="mb-1"
             />
@@ -1988,7 +1818,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email Address</label>
-              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="honeymoonadmin@gmail.com" />
+              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="admin@madrasflavoursevents.com" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Password</label>
@@ -2004,9 +1834,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </div>
             </div>
             {loginError && <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 text-xs">{loginError}</div>}
-            <button type="submit" disabled={isLoggingIn} className="w-full text-white font-semibold py-2.5 rounded-xl transition-all text-sm shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+            <button type="submit" disabled={isLoggingIn} className="w-full text-white font-semibold py-2.5 rounded-xl transition-all text-sm shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
               {isLoggingIn ? 'Signing In...' : 'Sign In to Dashboard'}
             </button>
+            <div className="text-center mt-4 text-xs text-gray-500 bg-gray-50 py-2 rounded-lg border border-gray-100">
+              Prototype Login: <br/><strong className="text-gray-700">admin@madrasflavoursevents.com</strong> / <strong className="text-gray-700">admin</strong>
+            </div>
           </form>
         </div>
       </div>
@@ -2023,8 +1856,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: '#3D2800' }}>
           <div>
             <img
-              src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-              alt="Honeymoon logo"
+              src="/assets/images/logomf.png"
+              alt="Madras Flavours Events logo"
               style={{ maxHeight: '40px', width: 'auto', objectFit: 'contain' }}
             />
             <div className="text-xs mt-1" style={{ color: '#A08060' }}>Admin Dashboard</div>
@@ -2034,7 +1867,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           {visibleNavItems.map((item) => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === item.id ? 'text-white shadow-md' : 'hover:text-white'}`}
-              style={activeTab === item.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' } : { color: '#A08060' }}>
+              style={activeTab === item.id ? { background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' } : { color: '#A08060' }}>
               <Icon name={item.icon as 'CalendarDaysIcon'} size={17} />
               <span className="flex-1 text-left">{item.label}</span>
               {item.badge ? <span className="bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">{item.badge}</span> : null}
@@ -2043,11 +1876,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         </nav>
         <div className="px-3 py-4 border-t" style={{ borderColor: '#3D2800' }}>
           <div className="flex items-center gap-2 px-3 py-2 mb-1">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(200,134,10,0.2)' }}>
-              <Icon name="UserCircleIcon" size={16} style={{ color: '#F0A830' }} />
+            <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(237, 28, 36,0.2)' }}>
+              <Icon name="UserCircleIcon" size={16} style={{ color: '#F5A623' }} />
             </div>
             <div>
-              <div className="text-xs font-semibold" style={{ color: '#F0A830' }}>{currentUser?.role || 'Super Admin'}</div>
+              <div className="text-xs font-semibold" style={{ color: '#F5A623' }}>{currentUser?.role || 'Super Admin'}</div>
               <div className="text-xs" style={{ color: '#A08060' }}>{currentUser?.email || ''}</div>
             </div>
           </div>
@@ -2155,19 +1988,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div className="bg-white rounded-xl border border-gray-200">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                     <h2 className="font-semibold text-gray-900 text-sm">New Enquiries</h2>
-                    <button onClick={() => setActiveTab('enquiries')} className="text-xs font-medium hover:underline" style={{ color: '#C8860A' }}>View all</button>
+                    <button onClick={() => setActiveTab('enquiries')} className="text-xs font-medium hover:underline" style={{ color: '#ED1C24' }}>View all</button>
                   </div>
                   <div className="divide-y divide-gray-50">
                     {enquiries.slice(0, 3).map((b) => (
                       <div key={b.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                          <span className="text-xs font-bold" style={{ color: '#C8860A' }}>{b.name.charAt(0)}</span>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                          <span className="text-xs font-bold" style={{ color: '#ED1C24' }}>{b.name.charAt(0)}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 truncate">{b.name}</div>
                           <div className="text-xs text-gray-400">{b.eventType} · {b.date} · {b.guests} guests</div>
                         </div>
-                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Honeymoon! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
+                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={13} />
@@ -2183,15 +2016,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div className="bg-white rounded-xl border border-gray-200">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                     <h2 className="font-semibold text-gray-900 text-sm">Upcoming Events</h2>
-                    <button onClick={() => setActiveTab('calendar')} className="text-xs font-medium hover:underline" style={{ color: '#C8860A' }}>Calendar</button>
+                    <button onClick={() => setActiveTab('calendar')} className="text-xs font-medium hover:underline" style={{ color: '#ED1C24' }}>Calendar</button>
                   </div>
                   <div className="divide-y divide-gray-50">
                     {bookings.filter(b => b.status === 'event_scheduled').sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4).map((b) => {
                       const d = new Date(b.date);
                       return (
                         <div key={b.id} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                          <div className="w-10 text-center flex-shrink-0 rounded-lg py-1" style={{ background: 'rgba(200,134,10,0.08)' }}>
-                            <div className="text-xs font-medium uppercase" style={{ color: '#C8860A' }}>{MONTHS[d.getMonth()]}</div>
+                          <div className="w-10 text-center flex-shrink-0 rounded-lg py-1" style={{ background: 'rgba(237, 28, 36,0.08)' }}>
+                            <div className="text-xs font-medium uppercase" style={{ color: '#ED1C24' }}>{MONTHS[d.getMonth()]}</div>
                             <div className="text-lg font-bold leading-tight" style={{ color: '#A06A05' }}>{d.getDate()}</div>
                           </div>
                           <div className="flex-1 min-w-0">
@@ -2227,8 +2060,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-5">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                        <span className="text-base font-bold" style={{ color: '#C8860A' }}>{b.name.charAt(0)}</span>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                        <span className="text-base font-bold" style={{ color: '#ED1C24' }}>{b.name.charAt(0)}</span>
                       </div>
                       <div>
                         <div className="font-semibold text-gray-900">{b.name}</div>
@@ -2257,13 +2090,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {/* Package Selection Banner */}
                   <div className="mt-3">
                     {b.package && b.package !== 'Not Selected' ? (
-                      <div className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 border" style={{ background: 'rgba(200,134,10,0.06)', borderColor: 'rgba(200,134,10,0.25)' }}>
+                      <div className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 border" style={{ background: 'rgba(237, 28, 36,0.06)', borderColor: 'rgba(237, 28, 36,0.25)' }}>
                         <span className="text-lg">🎁</span>
                         <div>
-                          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#C8860A' }}>Preferred Package</div>
+                          <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#ED1C24' }}>Preferred Package</div>
                           <div className="text-sm font-bold text-gray-900">{b.package}</div>
                         </div>
-                        <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(200,134,10,0.15)', color: '#A06A05' }}>Customer Selected</span>
+                        <span className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: 'rgba(237, 28, 36,0.15)', color: '#A06A05' }}>Customer Selected</span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 border border-gray-100 bg-gray-50">
@@ -2278,7 +2111,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Honeymoon! We'd love to help with your ${b.eventType} on ${b.date}. Let me share our menu packages with you shortly.`)}
+                    <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events! We'd love to help with your ${b.eventType} on ${b.date}. Let me share our menu packages with you shortly.`)}
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
                       style={{ background: '#25D366', color: 'white' }}>
@@ -2287,7 +2120,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </a>
                     <button onClick={() => { updateStatus(b.id, 'menu_sent'); setShowMenuPanel(true); setSelectedBooking(b); }}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors"
-                      style={{ borderColor: '#C8860A', color: '#C8860A' }}>
+                      style={{ borderColor: '#ED1C24', color: '#ED1C24' }}>
                       <Icon name="ClipboardDocumentListIcon" size={14} />
                       Send Menu & Advance
                     </button>
@@ -2312,7 +2145,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {['all', ...STATUS_FLOW.filter(s => s !== 'new_enquiry' && s !== 'completed')].map((s) => (
                     <button key={s} onClick={() => setFilterStatus(s)}
                       className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                      style={filterStatus === s ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
+                      style={filterStatus === s ? { background: 'linear-gradient(135deg, #ED1C24, #F5A623)' } : {}}>
                       {s === 'all' ? 'All' : STATUS_LABELS[s as BookingStatus]}
                     </button>
                   ))}
@@ -2343,8 +2176,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <tr key={booking.id} className="hover:bg-gray-50/80 transition-colors">
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                                <span className="text-xs font-bold" style={{ color: '#C8860A' }}>{booking.name.charAt(0)}</span>
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                                <span className="text-xs font-bold" style={{ color: '#ED1C24' }}>{booking.name.charAt(0)}</span>
                               </div>
                               <div>
                                 <div className="font-medium text-gray-900 text-sm">{booking.name}</div>
@@ -2378,7 +2211,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is Honeymoon regarding your ${booking.eventType} booking on ${booking.date}.`)}
+                            <a href={buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]}, this is Madras Flavours Events regarding your ${booking.eventType} booking on ${booking.date}.`)}
                               target="_blank" rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                               style={{ background: '#25D366', color: 'white' }}>
@@ -2388,7 +2221,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-3">
-                              <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#C8860A' }}>
+                              <button onClick={() => setSelectedBooking(booking)} className="text-xs font-semibold flex items-center gap-1 hover:underline whitespace-nowrap" style={{ color: '#ED1C24' }}>
                                 Manage <Icon name="ChevronRightIcon" size={12} />
                               </button>
                               {currentUser?.role === 'Super Admin' && (
@@ -2479,7 +2312,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${STATUS_COLORS[b.status]}`}>
                             {STATUS_LABELS[b.status]}
                           </span>
-                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at Honeymoon on ${b.date} at ${b.time}. We look forward to seeing you!`)}
+                          <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, just a reminder about your ${b.eventType} at Madras Flavours Events on ${b.date} at ${b.time}. We look forward to seeing you!`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -2522,8 +2355,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <tr key={customer.id} className="hover:bg-gray-50/80 transition-colors">
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                                <span className="text-sm font-bold" style={{ color: '#C8860A' }}>{customer.name.charAt(0)}</span>
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                                <span className="text-sm font-bold" style={{ color: '#ED1C24' }}>{customer.name.charAt(0)}</span>
                               </div>
                               <div className="font-medium text-gray-900">{customer.name}</div>
                             </div>
@@ -2537,14 +2370,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <td className="px-4 py-3.5 text-xs text-gray-500">{customer.lastEvent}</td>
                           <td className="px-4 py-3.5">
                             <div className="flex items-center gap-2">
-                              <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is Honeymoon. How can we help you today?`)}
+                              <a href={buildWhatsAppLink(customer.phone, `Hi ${customer.name.split(' ')[0]}, this is Madras Flavours Events. How can we help you today?`)}
                                 target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                 style={{ background: '#25D366', color: 'white' }}>
                                 <Icon name="ChatBubbleLeftRightIcon" size={12} />
                                 WhatsApp
                               </a>
-                              <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-semibold hover:underline" style={{ color: '#C8860A' }}>View</button>
+                              <button onClick={() => setSelectedCustomer(customer)} className="text-xs font-semibold hover:underline" style={{ color: '#ED1C24' }}>View</button>
                             </div>
                           </td>
                         </tr>
@@ -2647,7 +2480,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               )}
                             </td>
                             <td className="px-4 py-3.5">
-                              <button onClick={() => setSelectedBooking(b)} className="text-xs font-semibold hover:underline" style={{ color: '#C8860A' }}>Manage</button>
+                              <button onClick={() => setSelectedBooking(b)} className="text-xs font-semibold hover:underline" style={{ color: '#ED1C24' }}>Manage</button>
                             </td>
                           </tr>
                         );
@@ -2664,7 +2497,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <div className="space-y-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-sm text-gray-500">Edit menus, packages, and prices. Send directly to customers via WhatsApp.</p>
-                <button onClick={saveAllMenusToDatabase} disabled={isSavingMenus} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl text-white shadow-md transition-all hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                <button onClick={saveAllMenusToDatabase} disabled={isSavingMenus} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl text-white shadow-md transition-all hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                   <Icon name="CloudArrowUpIcon" size={16} />
                   {isSavingMenus ? 'Saving...' : 'Save Changes to Website'}
                 </button>
@@ -2680,7 +2513,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
                   <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
                     className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${adminMenuTab === tab.id ? 'text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:border-yellow-400'}`}
-                    style={adminMenuTab === tab.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}>
+                    style={adminMenuTab === tab.id ? { background: 'linear-gradient(135deg, #ED1C24, #F5A623)' } : {}}>
                     {tab.label}
                   </button>
                 ))}
@@ -2697,7 +2530,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="flex items-center justify-between mb-2">
                             <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
                             <div className="flex gap-2">
-                              <button onClick={saveEditPackage} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>Save</button>
+                              <button onClick={saveEditPackage} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>Save</button>
                               <button onClick={() => { setEditingPackageId(null); setEditingPackageData(null); }} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500">Cancel</button>
                             </div>
                           </div>
@@ -2753,12 +2586,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div>
                               <div className="flex items-center gap-2 mb-0.5">
                                 <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
-                                {pkg.tag && <span className="text-xs font-semibold px-2 py-0.5 rounded-full border" style={{ background: 'rgba(200,134,10,0.08)', color: '#C8860A', borderColor: 'rgba(200,134,10,0.3)' }}>{pkg.tag}</span>}
+                                {pkg.tag && <span className="text-xs font-semibold px-2 py-0.5 rounded-full border" style={{ background: 'rgba(237, 28, 36,0.08)', color: '#ED1C24', borderColor: 'rgba(237, 28, 36,0.3)' }}>{pkg.tag}</span>}
                               </div>
-                              <span className="text-lg font-bold" style={{ color: '#C8860A' }}>£{pkg.pricePerPerson}<span className="text-sm font-normal text-gray-500">/person (Excl. VAT)</span></span>
+                              <span className="text-lg font-bold" style={{ color: '#ED1C24' }}>£{pkg.pricePerPerson}<span className="text-sm font-normal text-gray-500">/person (Excl. VAT)</span></span>
                               {pkg.guestLabel && <div className="text-xs text-gray-500 mt-0.5">{pkg.guestLabel}</div>}
                             </div>
-                            <button onClick={() => startEditPackage(pkg)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-amber-50" style={{ borderColor: '#C8860A', color: '#C8860A' }}>
+                            <button onClick={() => startEditPackage(pkg)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-amber-50" style={{ borderColor: '#ED1C24', color: '#ED1C24' }}>
                               <Icon name="PencilSquareIcon" size={14} />
                               Edit
                             </button>
@@ -2815,14 +2648,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {/* Venue Hall Charges */}
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOffice2Icon" size={16} style={{ color: '#C8860A' }} />
+                      <Icon name="BuildingOffice2Icon" size={16} style={{ color: '#ED1C24' }} />
                       Venue Hall Charges
                     </h3>
                     <div className="space-y-2">
                       {editableVenueCharges.map((row, i) => (
                         <div key={i} className="flex items-center gap-3 flex-wrap">
                           <input type="text" value={row.day} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                          <input type="text" value={row.charge} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, charge: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
+                          <input type="text" value={row.charge} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, charge: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
                           <input type="text" value={row.note} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, note: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-500" placeholder="Note" />
                         </div>
                       ))}
@@ -2832,7 +2665,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {/* Dry Hire Prices */}
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOfficeIcon" size={16} style={{ color: '#C8860A' }} />
+                      <Icon name="BuildingOfficeIcon" size={16} style={{ color: '#ED1C24' }} />
                       Dry Hire Prices
                     </h3>
                     <div className="space-y-2">
@@ -2840,7 +2673,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <div key={i} className="flex items-center gap-3 flex-wrap">
                           <input type="text" value={row.day} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Day" />
                           <input type="text" value={row.session} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, session: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Session" />
-                          <input type="number" value={row.price} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, price: Number(e.target.value) } : r))} className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} placeholder="Price (£)" />
+                          <input type="number" value={row.price} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, price: Number(e.target.value) } : r))} className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} placeholder="Price (£)" />
                         </div>
                       ))}
                     </div>
@@ -2854,7 +2687,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {editableTableService.map((ts, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <input type="text" value={ts.service} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, service: e.target.value } : t))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={ts.price} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, price: e.target.value } : t))} className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
+                            <input type="text" value={ts.price} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, price: e.target.value } : t))} className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
                           </div>
                         ))}
                       </div>
@@ -2865,7 +2698,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {editableKidsPricing.map((kp, i) => (
                           <div key={i} className="flex items-center gap-2">
                             <input type="text" value={kp.ageRange} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, ageRange: e.target.value } : k))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={kp.price} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, price: e.target.value } : k))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#C8860A' }} />
+                            <input type="text" value={kp.price} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, price: e.target.value } : k))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
                           </div>
                         ))}
                       </div>
@@ -2922,7 +2755,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
                           className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
                         <button onClick={() => { if (newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                           <Icon name="PlusIcon" size={16} />
                         </button>
                       </div>
@@ -2978,7 +2811,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
                           className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
                         <button onClick={() => { if (newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                           <Icon name="PlusIcon" size={16} />
                         </button>
                       </div>
@@ -2995,7 +2828,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="flex flex-wrap gap-2">
                       {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
                         <a key={b.id}
-                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Honeymoon:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
+                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Madras Flavours Events:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${editableLiveCounter.extras.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                           style={{ background: '#25D366', color: 'white' }}>
@@ -3037,7 +2870,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <input type="number" step="0.01" placeholder="0.00" value={newLiveItemPrice} onChange={(e) => setNewLiveItemPrice(e.target.value)} className="w-20 border border-dashed border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none bg-gray-50" />
                         </div>
                         <button onClick={() => { if (newLiveItemName.trim()) { setEditableLiveCounter(prev => ({ ...prev, [section.key]: [...prev[section.key], { name: newLiveItemName.trim(), price: parseFloat(newLiveItemPrice) || 0 }] })); setNewLiveItemName(''); setNewLiveItemPrice(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                           <Icon name="PlusIcon" size={16} />
                         </button>
                       </div>
@@ -3062,8 +2895,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div key={b.id} className="bg-white rounded-xl border border-gray-200 p-5">
                   <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                        <span className="text-base font-bold" style={{ color: '#C8860A' }}>{b.name.charAt(0)}</span>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                        <span className="text-base font-bold" style={{ color: '#ED1C24' }}>{b.name.charAt(0)}</span>
                       </div>
                       <div>
                         <div className="font-semibold text-gray-900">{b.name}</div>
@@ -3113,7 +2946,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       {b.discount && (
                         <div><span className="text-gray-500">Discount: </span><span className="font-semibold text-red-600">-£{getDiscountAmount(b).toLocaleString()}</span></div>
                       )}
-                      <div><span className="text-gray-500">Total: </span><span className="font-bold" style={{ color: '#C8860A' }}>£{getTotalAmount(b).toLocaleString()}</span></div>
+                      <div><span className="text-gray-500">Total: </span><span className="font-bold" style={{ color: '#ED1C24' }}>£{getTotalAmount(b).toLocaleString()}</span></div>
                       <div className="flex items-center gap-1"><Icon name="CheckCircleIcon" size={14} className="text-emerald-500" /><span className="text-emerald-700 font-medium text-xs">Fully Paid</span></div>
                     </div>
                   </div>
@@ -3205,7 +3038,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Icon name="BuildingOfficeIcon" size={18} style={{ color: '#C8860A' }} />
+                    <Icon name="BuildingOfficeIcon" size={18} style={{ color: '#ED1C24' }} />
                     Venue Details
                   </h3>
                   <div className="space-y-3">
@@ -3237,7 +3070,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       onClick={saveVenueDetails}
                       disabled={isSavingVenueDetails}
                       className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-1 shadow-md active:scale-95 disabled:opacity-50"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}
                     >
                       {isSavingVenueDetails ? 'Saving...' : 'Save Changes'}
                     </button>
@@ -3246,7 +3079,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Icon name="CalendarDaysIcon" size={18} style={{ color: '#C8860A' }} />
+                    <Icon name="CalendarDaysIcon" size={18} style={{ color: '#ED1C24' }} />
                     Pricing & Deposits
                   </h3>
                   <div className="space-y-3">
@@ -3279,7 +3112,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       onClick={savePricingDetails}
                       disabled={isSavingPricingDetails}
                       className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-4 shadow-md active:scale-95 disabled:opacity-50 w-full"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}
                     >
                       {isSavingPricingDetails ? 'Saving...' : 'Save Pricing & Deposits'}
                     </button>
@@ -3291,7 +3124,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="space-y-6">
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Icon name="CreditCardIcon" size={18} style={{ color: '#C8860A' }} />
+                    <Icon name="CreditCardIcon" size={18} style={{ color: '#ED1C24' }} />
                     Bank Account Details
                   </h3>
                   <div className="space-y-3.5">
@@ -3312,7 +3145,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                 <div className="bg-white rounded-xl border border-gray-200 p-5">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Icon name="NoSymbolIcon" size={18} style={{ color: '#C8860A' }} />
+                    <Icon name="NoSymbolIcon" size={18} style={{ color: '#ED1C24' }} />
                     Block Dates
                   </h3>
                   <div className="flex items-center gap-2">
@@ -3340,7 +3173,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <Icon name="TagIcon" size={18} style={{ color: '#C8860A' }} />
+                    <Icon name="TagIcon" size={18} style={{ color: '#ED1C24' }} />
                     Discount Approvals
                   </h3>
                   <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -3514,7 +3347,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
                   <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Icon name="MapIcon" size={24} style={{ color: '#C8860A' }} />
+                    <Icon name="MapIcon" size={24} style={{ color: '#ED1C24' }} />
                     Booking Timeline Tracker
                   </h3>
                   {trackingBookingId && (
@@ -3534,7 +3367,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <input 
                         type="text"
                         placeholder="Search orders by name, email, phone number, or event type..."
-                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C8860A] transition-shadow shadow-sm"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ED1C24] transition-shadow shadow-sm"
                         value={trackerSearch}
                         onChange={(e) => setTrackerSearch(e.target.value)}
                       />
@@ -3564,14 +3397,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               setTrackingBookingId(b.id);
                               setTrackerSearch('');
                             }}
-                            className="px-5 py-4 hover:bg-[#C8860A]/5 cursor-pointer border-b border-gray-50 last:border-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors group"
+                            className="px-5 py-4 hover:bg-[#ED1C24]/5 cursor-pointer border-b border-gray-50 last:border-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors group"
                           >
                             <div className="flex items-start gap-4">
                               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-amber-50 text-amber-700 font-bold text-lg border border-amber-100">
                                 {b.name.charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <div className="font-semibold text-gray-900 text-sm group-hover:text-[#C8860A] transition-colors">{b.name}</div>
+                                <div className="font-semibold text-gray-900 text-sm group-hover:text-[#ED1C24] transition-colors">{b.name}</div>
                                 <div className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                                   <span className="flex items-center gap-1"><Icon name="EnvelopeIcon" size={12} /> {b.email}</span>
                                   <span className="hidden sm:inline text-gray-300">•</span>
@@ -3765,7 +3598,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <span className="text-xs text-gray-400">Step {STATUS_FLOW.indexOf(selectedBooking.status) + 1} of {STATUS_FLOW.length}</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-1.5">
-                <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${((STATUS_FLOW.indexOf(selectedBooking.status) + 1) / STATUS_FLOW.length) * 100}%`, background: 'linear-gradient(90deg, #C8860A, #F0A830)' }} />
+                <div className="h-1.5 rounded-full transition-all duration-500" style={{ width: `${((STATUS_FLOW.indexOf(selectedBooking.status) + 1) / STATUS_FLOW.length) * 100}%`, background: 'linear-gradient(90deg, #ED1C24, #F5A623)' }} />
               </div>
             </div>
 
@@ -3774,15 +3607,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <div className="bg-gray-50 rounded-xl p-4">
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Customer</div>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                    <span className="text-base font-bold" style={{ color: '#C8860A' }}>{selectedBooking.name.charAt(0)}</span>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                    <span className="text-base font-bold" style={{ color: '#ED1C24' }}>{selectedBooking.name.charAt(0)}</span>
                   </div>
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900">{selectedBooking.name}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.email}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.phone}</div>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is Honeymoon regarding your ${selectedBooking.eventType} booking.`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is Madras Flavours Events regarding your ${selectedBooking.eventType} booking.`)}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg"
                     style={{ background: '#25D366', color: 'white' }}>
@@ -4139,7 +3972,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {(selectedBooking.status === 'menu_sent' || selectedBooking.status === 'menu_selected') && (
                 <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/50">
                   <div className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <Icon name="ClipboardDocumentListIcon" size={14} style={{ color: '#C8860A' }} />
+                    <Icon name="ClipboardDocumentListIcon" size={14} style={{ color: '#ED1C24' }} />
                     Select Package Chosen by Customer
                   </div>
                   <div className="space-y-3">
@@ -4786,7 +4619,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="flex gap-2">
                     <input type="text" placeholder="e.g. Extra 10 guests" value={extraLabel} onChange={(e) => setExtraLabel(e.target.value)} className="flex-1 border border-teal-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white" />
                     <input type="number" placeholder="£ amount" value={extraAmount} onChange={(e) => setExtraAmount(e.target.value)} className="w-24 border border-teal-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white" />
-                    <button onClick={() => addExtraCharge(selectedBooking.id)} className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                    <button onClick={() => addExtraCharge(selectedBooking.id)} className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                       <Icon name="PlusIcon" size={16} />
                     </button>
                   </div>
@@ -4906,7 +4739,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </div>
                     <div className="border-t border-gray-200 pt-2 flex justify-between">
                       <span className="font-bold text-gray-900">Balance Due</span>
-                      <span className="font-bold text-lg" style={{ color: '#C8860A' }}>£{(getTotalAmount(selectedBooking) - selectedBooking.deposit).toLocaleString()}</span>
+                      <span className="font-bold text-lg" style={{ color: '#ED1C24' }}>£{(getTotalAmount(selectedBooking) - selectedBooking.deposit).toLocaleString()}</span>
                     </div>
                   </div>
                   <a href={buildWhatsAppLink(selectedBooking.phone, buildFinalInvoiceWhatsAppText(selectedBooking, bankDetails))}
@@ -5219,7 +5052,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div className="flex gap-2">
                   <button onClick={() => { updateStatus(selectedBooking.id, 'menu_sent'); setShowMenuPanel(true); }}
                     className="flex-1 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
-                    style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                    style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                     <Icon name="ClipboardDocumentListIcon" size={16} />
                     Send Menu Options
                   </button>
@@ -5228,7 +5061,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {selectedBooking.status === 'menu_sent' && (
                 <button onClick={() => updateStatus(selectedBooking.id, 'menu_selected')}
                   className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                   <Icon name="CheckIcon" size={16} />
                   Mark Menu as Selected by Customer
                 </button>
@@ -5236,7 +5069,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {selectedBooking.status === 'menu_selected' && (
                 <button onClick={() => updateStatus(selectedBooking.id, 'deposit_pending')}
                   className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                   <Icon name="BanknotesIcon" size={16} />
                   Request Deposit Payment
                 </button>
@@ -5270,7 +5103,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
                       disabled={selectedBooking.discountRequest?.status === 'pending'}
                       className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                       <Icon name="DocumentTextIcon" size={16} />
                       {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
                     </button>
@@ -5298,14 +5131,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {selectedBooking.status === 'final_payment_received' && (
                 <button onClick={() => updateStatus(selectedBooking.id, 'event_scheduled')}
                   className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                   <Icon name="CalendarIcon" size={16} />
                   Schedule Event & Add to Calendar
                 </button>
               )}
               {selectedBooking.status === 'event_scheduled' && (
                 <div className="space-y-2">
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Honeymoon is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Madras Flavours Events is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
                     target="_blank" rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl"
                     style={{ background: '#25D366', color: 'white' }}>
@@ -5476,8 +5309,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </div>
             <div className="flex-1 overflow-auto p-5 space-y-5">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                  <span className="text-2xl font-bold" style={{ color: '#C8860A' }}>{selectedCustomer.name.charAt(0)}</span>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                  <span className="text-2xl font-bold" style={{ color: '#ED1C24' }}>{selectedCustomer.name.charAt(0)}</span>
                 </div>
                 <div>
                   <div className="font-semibold text-gray-900 text-lg">{selectedCustomer.name}</div>
@@ -5494,7 +5327,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {selectedCustomer.phone}
                 </div>
               </div>
-              <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is Honeymoon. How can we help you today?`)}
+              <a href={buildWhatsAppLink(selectedCustomer.phone, `Hi ${selectedCustomer.name.split(' ')[0]}, this is Madras Flavours Events. How can we help you today?`)}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl w-full"
                 style={{ background: '#25D366', color: 'white' }}>
@@ -5506,8 +5339,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   <div className="text-2xl font-bold text-gray-900">{selectedCustomer.totalBookings}</div>
                   <div className="text-xs text-gray-500 mt-0.5">Total Bookings</div>
                 </div>
-                <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(200,134,10,0.08)' }}>
-                  <div className="text-2xl font-bold" style={{ color: '#C8860A' }}>{selectedCustomer.totalSpent > 0 ? `£${selectedCustomer.totalSpent.toLocaleString()}` : '—'}</div>
+                <div className="rounded-xl p-3 text-center" style={{ background: 'rgba(237, 28, 36,0.08)' }}>
+                  <div className="text-2xl font-bold" style={{ color: '#ED1C24' }}>{selectedCustomer.totalSpent > 0 ? `£${selectedCustomer.totalSpent.toLocaleString()}` : '—'}</div>
                   <div className="text-xs text-gray-500 mt-0.5">Total Spent</div>
                 </div>
               </div>
@@ -5575,7 +5408,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <button
               onClick={() => setCustomAlert(null)}
               className="px-6 py-2 rounded-xl text-sm font-semibold text-white transition-all shadow-md active:scale-95 hover:brightness-110"
-              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+              style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}
             >
               OK
             </button>

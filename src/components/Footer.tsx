@@ -7,8 +7,8 @@ const Footer: React.FC = () => {
       <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <Image
-            src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-            alt="Honeymoon logo"
+            src="/assets/images/logomf.png"
+            alt="Madras Flavours Events logo"
             width={120}
             height={48}
             className="object-contain"
@@ -19,7 +19,7 @@ const Footer: React.FC = () => {
         <div className="flex items-center gap-5 text-sm text-midnight-text">
           <a href="#" className="hover:text-white transition-colors">Privacy</a>
           <a href="#" className="hover:text-white transition-colors">Terms</a>
-          <a href="mailto:hello@honeymoon.com" className="hover:text-white transition-colors">Contact</a>
+          <a href="mailto:hello@madrasflavoursevents.com" className="hover:text-white transition-colors">Contact</a>
         </div>
       </div>
     </footer>

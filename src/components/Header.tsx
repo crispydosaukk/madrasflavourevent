@@ -17,8 +17,8 @@ const Header: React.FC<HeaderProps> = () => {
         {/* Logo */}
         <a href="/home" className="flex items-center gap-2.5">
           <Image
-            src="/assets/images/oie_gAxqzQFu0Ixw-1777831503416.png"
-            alt="Honeymoon logo"
+            src="/assets/images/logomf.png"
+            alt="Madras Flavours Events logo"
             width={120}
             height={48}
             className="object-contain"

@@ -5,8 +5,6 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Icon from '@/components/ui/AppIcon';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import {
   INDIAN_MENU as DEFAULT_INDIAN_MENU,
   SRI_LANKAN_MENU as DEFAULT_SRI_LANKAN_MENU,
@@ -19,7 +17,6 @@ import {
   TERMS_AND_CONDITIONS as DEFAULT_TERMS_AND_CONDITIONS,
   DRY_HIRE_PRICES as DEFAULT_DRY_HIRE_PRICES,
 } from '@/app/data/menuData';
-import { onSnapshot, doc } from 'firebase/firestore';
 
 const EVENT_TYPES = ['Wedding', 'Birthday', 'Corporate', 'Anniversary', 'Graduation', 'Other'];
 
@@ -39,49 +36,11 @@ export default function HomePage() {
     DRY_HIRE_PRICES: DEFAULT_DRY_HIRE_PRICES,
   });
 
-  const [blockedDates, setBlockedDates] = useState<string[]>([]);
+  const [blockedDates] = useState<string[]>([]);
 
-  React.useEffect(() => {
-    return onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setMenus({
-          INDIAN_MENU: data.INDIAN_MENU || DEFAULT_INDIAN_MENU,
-          SRI_LANKAN_MENU: data.SRI_LANKAN_MENU || DEFAULT_SRI_LANKAN_MENU,
-          LIVE_COUNTER_PACKAGE: data.LIVE_COUNTER_PACKAGE || DEFAULT_LIVE_COUNTER_PACKAGE,
-          BANQUET_PACKAGES: data.BANQUET_PACKAGES || DEFAULT_BANQUET_PACKAGES,
-          VENUE_HALL_CHARGES: data.VENUE_HALL_CHARGES || DEFAULT_VENUE_HALL_CHARGES,
-          TABLE_SERVICE: data.TABLE_SERVICE || DEFAULT_TABLE_SERVICE,
-          KIDS_PRICING: data.KIDS_PRICING || DEFAULT_KIDS_PRICING,
-          STANDARD_SETUP: data.STANDARD_SETUP || DEFAULT_STANDARD_SETUP,
-          TERMS_AND_CONDITIONS: data.TERMS_AND_CONDITIONS || DEFAULT_TERMS_AND_CONDITIONS,
-          DRY_HIRE_PRICES: data.DRY_HIRE_PRICES || DEFAULT_DRY_HIRE_PRICES,
-        });
-      }
-    });
-  }, []);
-
-  const [pricingDetails, setPricingDetails] = useState({
+  const [pricingDetails] = useState({
     depositPercentage: 30,
   });
-
-  React.useEffect(() => {
-    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setPricingDetails({
-          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
-        });
-      }
-    });
-  }, []);
-
-  React.useEffect(() => {
-    return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
-      const dates = snapshot.docs.map(doc => doc.id);
-      setBlockedDates(dates);
-    });
-  }, []);
 
   const { INDIAN_MENU, SRI_LANKAN_MENU, LIVE_COUNTER_PACKAGE, BANQUET_PACKAGES, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
 
@@ -135,37 +94,12 @@ export default function HomePage() {
       return;
     }
     try {
-      const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
-      const guestCount = Number(bookingForm.guests) || 0;
-      const selectedPkg = BANQUET_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
-      const selectedExtra = LIVE_COUNTER_PACKAGE?.extras?.find(e => e.name === bookingForm.selectedPackage);
-      let baseAmount = 0;
-      if (selectedPkg) {
-        baseAmount = selectedPkg.pricePerPerson * guestCount;
-      } else if (selectedExtra) {
-        baseAmount = selectedExtra.price;
-      }
-      const deposit = pricingDetails.depositPercentage;
-      await addDoc(collection(db, 'booking_requests'), {
-        name: bookingForm.name,
-        email: bookingForm.email,
-        phone: fullPhone,
-        eventType: bookingForm.eventType,
-        date: bookingForm.date,
-        timeOfDay: bookingForm.timeOfDay,
-        guests: guestCount,
-        message: bookingForm.message,
-        package: bookingForm.selectedPackage || 'Not Selected',
-        baseAmount,
-        deposit,
-        extraCharges: [],
-        createdAt: new Date().toISOString()
-      });
+      // Prototype mode: store locally without database
       setSubmitted(true);
       setPhoneError('');
       setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
     } catch (error) {
-      console.error("Error adding document: ", error);
+      console.error("Error submitting request: ", error);
       setCustomHomeAlert({
         message: "There was an error submitting your request. Please try again.",
         type: 'error'
@@ -189,18 +123,18 @@ export default function HomePage() {
 
           {/* ── Left: Text content ── */}
           <div className="flex-1 text-center lg:text-left">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(200,134,10,0.2)', color: '#F0A830' }}>
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(237, 28, 36,0.2)', color: '#F5A623' }}>
               Banquet &amp; Catering
             </span>
             <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4">
               Make Your Event<br />
-              <span style={{ color: '#F0A830' }}>Unforgettable</span>
+              <span style={{ color: '#F5A623' }}>Unforgettable</span>
             </h1>
             <p className="text-lg mb-8 max-w-xl lg:mx-0 mx-auto" style={{ color: '#A08060' }}>
               Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Unforgettable events.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-              <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+              <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                 View Menus &amp; Packages
               </a>
               <a href="#book" className="border font-semibold px-8 py-3.5 rounded-xl transition-colors hover:text-white" style={{ borderColor: '#3D2800', color: '#A08060' }}>
@@ -216,13 +150,13 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 text-center mb-5">Fill in your details and we'll get back to you within 24 hours</p>
 
               {submitted ? (
-                <div className="text-center py-10 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                    <Icon name="CheckCircleIcon" size={28} style={{ color: '#C8860A' }} />
+                <div className="text-center py-10 rounded-2xl border" style={{ background: 'rgba(237, 28, 36,0.04)', borderColor: 'rgba(237, 28, 36,0.2)' }}>
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                    <Icon name="CheckCircleIcon" size={28} style={{ color: '#ED1C24' }} />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
                   <p className="text-gray-500 text-sm">We'll contact you within 24 hours to confirm your booking.</p>
-                  <button onClick={() => setSubmitted(false)} className="mt-5 text-sm font-medium hover:underline" style={{ color: '#C8860A' }}>
+                  <button onClick={() => setSubmitted(false)} className="mt-5 text-sm font-medium hover:underline" style={{ color: '#ED1C24' }}>
                     Submit another request
                   </button>
                 </div>
@@ -268,16 +202,16 @@ export default function HomePage() {
                   {/* Preferred Package */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                      <span style={{ color: '#C8860A' }}>🎁</span> Preferred Package
+                      <span style={{ color: '#ED1C24' }}>🎁</span> Preferred Package
                       {bookingForm.selectedPackage && (
-                        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(200,134,10,0.12)', color: '#C8860A' }}>Auto-selected</span>
+                        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(237, 28, 36,0.12)', color: '#ED1C24' }}>Auto-selected</span>
                       )}
                     </label>
                     <select
                       value={bookingForm.selectedPackage}
                       onChange={(e) => setBookingForm({ ...bookingForm, selectedPackage: e.target.value })}
                       className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white"
-                      style={bookingForm.selectedPackage ? { borderColor: '#C8860A', boxShadow: '0 0 0 1px rgba(200,134,10,0.3)' } : {}}
+                      style={bookingForm.selectedPackage ? { borderColor: '#ED1C24', boxShadow: '0 0 0 1px rgba(237, 28, 36,0.3)' } : {}}
                     >
                       <option value="">No specific package – help me choose</option>
                       <optgroup label="── Buffet Packages ──">
@@ -336,7 +270,7 @@ export default function HomePage() {
                     <label className="block text-xs font-medium text-gray-700 mb-1">Additional Notes</label>
                     <textarea rows={2} value={bookingForm.message} onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 resize-none" placeholder="Special requests, preferred menu, décor ideas..." />
                   </div>
-                  <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+                  <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                     {isSubmitting ? (
                       <span className="flex items-center gap-2">
                         <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
@@ -358,7 +292,7 @@ export default function HomePage() {
       </section>
 
       {/* Quick Stats */}
-      <div className="py-6 px-6" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+      <div className="py-6 px-6" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
         <div className="max-w-4xl mx-auto grid grid-cols-3 gap-4 text-center">
           {[
             { value: '500+', label: 'Events Hosted' },
@@ -377,7 +311,7 @@ export default function HomePage() {
       <section id="menus" className="py-16 px-4 md:px-6" style={{ background: '#FAFAF8' }}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(200,134,10,0.1)', color: '#C8860A' }}>
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(237, 28, 36,0.1)', color: '#ED1C24' }}>
               Our Menus
             </span>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Menus &amp; Packages</h2>
@@ -396,7 +330,7 @@ export default function HomePage() {
                 key={tab.id}
                 onClick={() => setActiveMenuTab(tab.id)}
                 className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeMenuTab === tab.id ? 'text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:border-yellow-400'}`}
-                style={activeMenuTab === tab.id ? { background: 'linear-gradient(135deg, #C8860A, #F0A830)' } : {}}
+                style={activeMenuTab === tab.id ? { background: 'linear-gradient(135deg, #ED1C24, #F5A623)' } : {}}
               >
                 {tab.label}
               </button>
@@ -409,7 +343,7 @@ export default function HomePage() {
               {/* Standard Setup */}
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                 <h3 className="text-xl font-bold text-gray-900 mb-1 text-center">Standard Setup Includes</h3>
-                <p className="text-center text-sm font-semibold mb-4" style={{ color: '#C8860A' }}>(Minimum {STANDARD_SETUP.minimumAdults} Adults Chargeable)</p>
+                <p className="text-center text-sm font-semibold mb-4" style={{ color: '#ED1C24' }}>(Minimum {STANDARD_SETUP.minimumAdults} Adults Chargeable)</p>
                 <div className="flex flex-wrap justify-center gap-3 mb-4">
                   {STANDARD_SETUP.includes.map((item) => (
                     <span key={item} className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-1.5 rounded-full">{item}</span>
@@ -431,11 +365,11 @@ export default function HomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {BANQUET_PACKAGES.map((pkg) => (
                   <div key={pkg.id} className={`bg-white rounded-2xl border-2 shadow-sm hover:shadow-md transition-shadow flex flex-col`}
-                    style={{ borderColor: pkg.id === 'gold' ? '#C8860A' : pkg.id === 'honeymoon' ? '#7C3AED' : '#E5E7EB' }}>
+                    style={{ borderColor: pkg.id === 'gold' ? '#ED1C24' : pkg.id === 'madrasflavours' ? '#7C3AED' : '#E5E7EB' }}>
                     <div className="p-5 flex-1">
                       {pkg.tag && (
                         <div className="mb-2">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: pkg.id === 'honeymoon' ? '#7C3AED' : 'rgba(200,134,10,0.1)', color: pkg.id === 'honeymoon' ? 'white' : '#C8860A' }}>
+                          <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: pkg.id === 'madrasflavours' ? '#7C3AED' : 'rgba(237, 28, 36,0.1)', color: pkg.id === 'madrasflavours' ? 'white' : '#ED1C24' }}>
                             {pkg.tag}
                           </span>
                         </div>
@@ -475,7 +409,7 @@ export default function HomePage() {
                       <button
                         onClick={() => handleEnquireNow(pkg.name)}
                         className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
-                        style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                        style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}
                       >
                         Enquire Now
                       </button>
@@ -495,7 +429,7 @@ export default function HomePage() {
                         {VENUE_HALL_CHARGES.map((row, i) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.charge}</td>
+                            <td className="py-3 font-bold text-right" style={{ color: '#ED1C24' }}>{row.charge}</td>
                             {row.note && <td className="py-3 text-gray-500 italic text-xs text-right pl-2">({row.note})</td>}
                           </tr>
                         ))}
@@ -506,7 +440,7 @@ export default function HomePage() {
                     <button
                       onClick={() => handleEnquireNow('Venue Hall')}
                       className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-4"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}
                     >
                       Enquire Now
                     </button>
@@ -536,7 +470,7 @@ export default function HomePage() {
                     <button
                       onClick={() => handleEnquireNow('Dry Hire')}
                       className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}
                     >
                       Enquire Now
                     </button>
@@ -552,7 +486,7 @@ export default function HomePage() {
                     {TABLE_SERVICE.map((ts) => (
                       <div key={ts.service} className="bg-gray-50 rounded-xl p-3">
                         <div className="text-xs text-gray-500 mb-0.5">{ts.service}</div>
-                        <div className="text-sm font-bold" style={{ color: '#C8860A' }}>{ts.price}</div>
+                        <div className="text-sm font-bold" style={{ color: '#ED1C24' }}>{ts.price}</div>
                       </div>
                     ))}
                   </div>
@@ -565,7 +499,7 @@ export default function HomePage() {
                         {KIDS_PRICING.map((row, i) => (
                           <tr key={i} className="hover:bg-gray-50">
                             <td className="py-3 pr-4 font-semibold text-gray-800">{row.ageRange}</td>
-                            <td className="py-3 font-bold text-right" style={{ color: '#C8860A' }}>{row.price}</td>
+                            <td className="py-3 font-bold text-right" style={{ color: '#ED1C24' }}>{row.price}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -576,7 +510,7 @@ export default function HomePage() {
                     <button
                       onClick={() => handleEnquireNow('Kids Pricing')}
                       className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] mb-3"
-                      style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}
                     >
                       Enquire Now
                     </button>
@@ -604,7 +538,7 @@ export default function HomePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Vegetarian Starters</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Vegetarian Starters</h4>
                     <ul className="space-y-2">
                       {INDIAN_MENU.starters.vegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -615,7 +549,7 @@ export default function HomePage() {
                     </ul>
                   </div>
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Non-Vegetarian Starters</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Non-Vegetarian Starters</h4>
                     <ul className="space-y-2">
                       {INDIAN_MENU.starters.nonVegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -635,7 +569,7 @@ export default function HomePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Vegetarian Mains</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Vegetarian Mains</h4>
                     <ul className="space-y-2">
                       {INDIAN_MENU.mains.vegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -646,7 +580,7 @@ export default function HomePage() {
                     </ul>
                   </div>
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Non-Vegetarian Mains</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Non-Vegetarian Mains</h4>
                     <ul className="space-y-2">
                       {INDIAN_MENU.mains.nonVegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -697,7 +631,7 @@ export default function HomePage() {
               <div className="text-center">
                 <a href="#book"
                   className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}>
                   Enquire Now
                 </a>
               </div>
@@ -719,7 +653,7 @@ export default function HomePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Vegetarian Starters</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Vegetarian Starters</h4>
                     <ul className="space-y-2">
                       {SRI_LANKAN_MENU.starters.vegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -730,7 +664,7 @@ export default function HomePage() {
                     </ul>
                   </div>
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Non-Vegetarian Starters</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Non-Vegetarian Starters</h4>
                     <ul className="space-y-2">
                       {SRI_LANKAN_MENU.starters.nonVegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -750,7 +684,7 @@ export default function HomePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Vegetarian Mains</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Vegetarian Mains</h4>
                     <ul className="space-y-2">
                       {SRI_LANKAN_MENU.mains.vegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -761,7 +695,7 @@ export default function HomePage() {
                     </ul>
                   </div>
                   <div className="p-6">
-                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Non-Vegetarian Mains</h4>
+                    <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Non-Vegetarian Mains</h4>
                     <ul className="space-y-2">
                       {SRI_LANKAN_MENU.mains.nonVegetarian.map((item) => (
                         <li key={item} className="flex items-center gap-2 text-sm text-gray-700">
@@ -811,7 +745,7 @@ export default function HomePage() {
               <div className="text-center">
                 <a href="#book"
                   className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}>
                   Enquire Now
                 </a>
               </div>
@@ -829,7 +763,7 @@ export default function HomePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Sri Lankan & South Indian */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                  <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>Srilankan &amp; South Indian</h4>
+                  <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>Srilankan &amp; South Indian</h4>
                   <ul className="space-y-2">
                     {LIVE_COUNTER_PACKAGE.srilankanSouthIndian.map((item) => (
                       <li key={item.name} className="flex items-center justify-between text-sm">
@@ -837,7 +771,7 @@ export default function HomePage() {
                           <span className="w-4 h-4 rounded border border-gray-300 flex-shrink-0 inline-block" />
                           {item.name}
                         </span>
-                        <span className="font-semibold" style={{ color: '#C8860A' }}>£{item.price.toFixed(2)}</span>
+                        <span className="font-semibold" style={{ color: '#ED1C24' }}>£{item.price.toFixed(2)}</span>
                       </li>
                     ))}
                   </ul>
@@ -845,7 +779,7 @@ export default function HomePage() {
 
                 {/* North Indian */}
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                  <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#C8860A' }}>North Indian</h4>
+                  <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2" style={{ borderColor: '#ED1C24' }}>North Indian</h4>
                   <ul className="space-y-2">
                     {LIVE_COUNTER_PACKAGE.northIndian.map((item) => (
                       <li key={item.name} className="flex items-center justify-between text-sm">
@@ -853,7 +787,7 @@ export default function HomePage() {
                           <span className="w-4 h-4 rounded border border-gray-300 flex-shrink-0 inline-block" />
                           {item.name}
                         </span>
-                        <span className="font-semibold" style={{ color: '#C8860A' }}>£{item.price.toFixed(2)}</span>
+                        <span className="font-semibold" style={{ color: '#ED1C24' }}>£{item.price.toFixed(2)}</span>
                       </li>
                     ))}
                   </ul>
@@ -862,7 +796,7 @@ export default function HomePage() {
 
               {/* Extras */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2 text-center" style={{ borderColor: '#C8860A' }}>Extra</h4>
+                <h4 className="text-lg font-bold text-gray-900 mb-4 pb-2 border-b-2 text-center" style={{ borderColor: '#ED1C24' }}>Extra</h4>
                 <ul className="space-y-3 max-w-lg mx-auto">
                   {LIVE_COUNTER_PACKAGE.extras.map((item) => (
                     <li key={item.name} className="flex items-start justify-between text-sm gap-4">
@@ -873,7 +807,7 @@ export default function HomePage() {
                           {'note' in item && item.note && <span className="block text-xs text-gray-400 italic">({item.note})</span>}
                         </span>
                       </span>
-                      <span className="font-semibold flex-shrink-0" style={{ color: '#C8860A' }}>£{item.price.toFixed(2)}</span>
+                      <span className="font-semibold flex-shrink-0" style={{ color: '#ED1C24' }}>£{item.price.toFixed(2)}</span>
                     </li>
                   ))}
                 </ul>
@@ -888,7 +822,7 @@ export default function HomePage() {
               <div className="text-center">
                 <a href="#book"
                   className="inline-flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl shadow-sm hover:shadow-md"
-                  style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)', color: 'white' }}>
+                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)', color: 'white' }}>
                   Enquire Now
                 </a>
               </div>
@@ -901,7 +835,7 @@ export default function HomePage() {
       <section id="terms" className="py-16 px-4 md:px-6 bg-white">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10">
-            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(200,134,10,0.1)', color: '#C8860A' }}>
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(237, 28, 36,0.1)', color: '#ED1C24' }}>
               Legal
             </span>
             <h2 className="text-3xl font-bold text-gray-900">Terms &amp; Conditions</h2>
@@ -919,7 +853,7 @@ export default function HomePage() {
                   onClick={() => toggleSection(section.key)}
                   className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
                 >
-                  <span className="font-semibold text-sm" style={{ color: '#C8860A' }}>{section.title}</span>
+                  <span className="font-semibold text-sm" style={{ color: '#ED1C24' }}>{section.title}</span>
                   <Icon name={expandedSection === section.key ? 'ChevronUpIcon' : 'ChevronDownIcon'} size={18} className="text-gray-400 flex-shrink-0" />
                 </button>
                 {expandedSection === section.key && (
@@ -955,13 +889,13 @@ export default function HomePage() {
           <p className="text-gray-500 text-center mb-10">Fill in your details and we'll get back to you within 24 hours</p>
 
           {submitted ? (
-            <div className="text-center py-12 rounded-2xl border" style={{ background: 'rgba(200,134,10,0.04)', borderColor: 'rgba(200,134,10,0.2)' }}>
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(200,134,10,0.1)' }}>
-                <Icon name="CheckCircleIcon" size={32} style={{ color: '#C8860A' }} />
+            <div className="text-center py-12 rounded-2xl border" style={{ background: 'rgba(237, 28, 36,0.04)', borderColor: 'rgba(237, 28, 36,0.2)' }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
+                <Icon name="CheckCircleIcon" size={32} style={{ color: '#ED1C24' }} />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Request Received!</h3>
               <p className="text-gray-500">We'll contact you within 24 hours to confirm your booking.</p>
-              <button onClick={() => setSubmitted(false)} className="mt-6 font-medium hover:underline" style={{ color: '#C8860A' }}>
+              <button onClick={() => setSubmitted(false)} className="mt-6 font-medium hover:underline" style={{ color: '#ED1C24' }}>
                 Submit another request
               </button>
             </div>
@@ -1043,7 +977,7 @@ export default function HomePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
                 <textarea rows={3} value={bookingForm.message} onChange={(e) => setBookingForm({ ...bookingForm, message: e.target.value })} className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 resize-none" placeholder="Special requests, preferred menu, décor ideas..." />
               </div>
-              <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}>
+              <button type="submit" disabled={isSubmitting} className="w-full text-white font-semibold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 cursor-pointer disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
@@ -1082,7 +1016,7 @@ export default function HomePage() {
             <button
               onClick={() => setCustomHomeAlert(null)}
               className="px-6 py-2 rounded-xl text-sm font-semibold text-white transition-all shadow-md active:scale-95 hover:brightness-110"
-              style={{ background: 'linear-gradient(135deg, #C8860A, #F0A830)' }}
+              style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}
             >
               OK
             </button>

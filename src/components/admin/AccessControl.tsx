@@ -1,21 +1,18 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { db, firebaseConfig } from '@/lib/firebase';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs } from 'firebase/firestore';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import Icon from '@/components/ui/AppIcon';
 
-// Initialize secondary auth for creating users without logging out
-const getSecondaryAuth = () => {
-  let app2;
-  try {
-    app2 = getApp('secondary');
-  } catch (e) {
-    app2 = initializeApp(firebaseConfig, 'secondary');
-  }
-  return getAuth(app2);
-};
+// --- MOCK FIREBASE FOR PROTOTYPE ---
+const db = {};
+const doc = (db: any, ...args: any[]) => args.join('/');
+const addDoc = async (...args: any[]) => {};
+const updateDoc = async (...args: any[]) => {};
+const deleteDoc = async (...args: any[]) => {};
+const collection = (db: any, ...args: any[]) => args.join('/');
+const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
+const onSnapshot = (coll: any, cb: any) => () => {};
+const getSecondaryAuth = () => ({});
+const createUserWithEmailAndPassword = async (...args: any[]) => ({ user: { uid: 'mock-uid' } });
 
 export default function AccessControl({ currentUserRole }: { currentUserRole?: string }) {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'permissions'>('users');
@@ -26,14 +23,14 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
   const [users, setUsers] = useState<any[]>([]);
   
   useEffect(() => {
-    const unsubPerms = onSnapshot(collection(db, 'permissions'), snap => {
-      setPermissions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubPerms = onSnapshot(collection(db, 'permissions'), (snap: any) => {
+      setPermissions(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     });
-    const unsubRoles = onSnapshot(collection(db, 'roles'), snap => {
-      setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap: any) => {
+      setRoles(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     });
-    const unsubUsers = onSnapshot(collection(db, 'users'), snap => {
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap: any) => {
+      setUsers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     });
     return () => { unsubPerms(); unsubRoles(); unsubUsers(); };
   }, []);
@@ -41,8 +38,8 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
   useEffect(() => {
     const seedPermissions = async () => {
       try {
-        const snap = await getDocs(collection(db, 'permissions'));
-        const existing = snap.docs.map(d => d.data().title);
+        const snap: any = await getDocs(collection(db, 'permissions'));
+        const existing = snap.docs.map((d: any) => d.data().title);
         const DEFAULT_PERMISSIONS = [
           'manage_enquiries',
           'manage_bookings',
@@ -75,19 +72,19 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
       <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
         <button
           onClick={() => setActiveTab('users')}
-          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'users' ? 'border-[#C8860A] text-[#C8860A]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'users' ? 'border-[#ED1C24] text-[#ED1C24]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           Users
         </button>
         <button
           onClick={() => setActiveTab('roles')}
-          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'roles' ? 'border-[#C8860A] text-[#C8860A]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'roles' ? 'border-[#ED1C24] text-[#ED1C24]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           Roles
         </button>
         <button
           onClick={() => setActiveTab('permissions')}
-          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'permissions' ? 'border-[#C8860A] text-[#C8860A]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          className={`pb-2 px-1 font-semibold text-sm transition-colors border-b-2 ${activeTab === 'permissions' ? 'border-[#ED1C24] text-[#ED1C24]' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
         >
           Permissions
         </button>
@@ -166,7 +163,7 @@ function UsersTab({ users, roles, currentUserRole }: { users: any[], roles: any[
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-gray-900">Manage Users</h3>
-        <button onClick={() => { setEditingId(null); setForm({ name: '', email: '', password: '', roleId: '' }); setOpenForm(true); }} className="bg-[#C8860A] hover:bg-[#A06A08] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+        <button onClick={() => { setEditingId(null); setForm({ name: '', email: '', password: '', roleId: '' }); setOpenForm(true); }} className="bg-[#ED1C24] hover:bg-[#C1161B] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
           <Icon name="PlusIcon" size={16} /> Add User
         </button>
       </div>
@@ -191,7 +188,7 @@ function UsersTab({ users, roles, currentUserRole }: { users: any[], roles: any[
           </select>
           <div className="col-span-1 md:col-span-2 flex justify-end gap-2">
             <button onClick={() => { setOpenForm(false); setEditingId(null); }} className="px-4 py-2 text-sm font-semibold text-gray-500">Cancel</button>
-            <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm font-semibold bg-[#C8860A] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
+            <button onClick={handleSave} disabled={loading} className="px-4 py-2 text-sm font-semibold bg-[#ED1C24] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
           </div>
         </div>
       )}
@@ -282,7 +279,7 @@ function RolesTab({ roles, permissions, currentUserRole }: { roles: any[], permi
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-gray-900">Manage Roles</h3>
-        <button onClick={() => { setEditingId(null); setForm({ name: '', permissionIds: [] }); setOpenForm(true); }} className="bg-[#C8860A] hover:bg-[#A06A08] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+        <button onClick={() => { setEditingId(null); setForm({ name: '', permissionIds: [] }); setOpenForm(true); }} className="bg-[#ED1C24] hover:bg-[#C1161B] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
           <Icon name="PlusIcon" size={16} /> Add Role
         </button>
       </div>
@@ -297,7 +294,7 @@ function RolesTab({ roles, permissions, currentUserRole }: { roles: any[], permi
                 <button
                   key={p.id}
                   onClick={() => togglePermission(p.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${form.permissionIds.includes(p.id) ? 'bg-[#C8860A] text-white border-[#C8860A]' : 'bg-white text-gray-600 border-gray-300'}`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${form.permissionIds.includes(p.id) ? 'bg-[#ED1C24] text-white border-[#ED1C24]' : 'bg-white text-gray-600 border-gray-300'}`}
                 >
                   {p.title}
                 </button>
@@ -306,7 +303,7 @@ function RolesTab({ roles, permissions, currentUserRole }: { roles: any[], permi
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => { setOpenForm(false); setEditingId(null); }} className="px-4 py-2 text-sm font-semibold text-gray-500">Cancel</button>
-            <button onClick={handleSave} className="px-4 py-2 text-sm font-semibold bg-[#C8860A] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
+            <button onClick={handleSave} className="px-4 py-2 text-sm font-semibold bg-[#ED1C24] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
           </div>
         </div>
       )}
@@ -384,7 +381,7 @@ function PermissionsTab({ permissions, currentUserRole }: { permissions: any[], 
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-bold text-gray-900">Manage Permissions</h3>
-        <button onClick={() => { setEditingId(null); setTitle(''); setOpenForm(true); }} className="bg-[#C8860A] hover:bg-[#A06A08] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+        <button onClick={() => { setEditingId(null); setTitle(''); setOpenForm(true); }} className="bg-[#ED1C24] hover:bg-[#C1161B] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
           <Icon name="PlusIcon" size={16} /> Add Permission
         </button>
       </div>
@@ -393,7 +390,7 @@ function PermissionsTab({ permissions, currentUserRole }: { permissions: any[], 
         <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex gap-4 items-center mb-6 max-w-lg">
           <input className="border rounded-lg px-3 py-2 text-sm flex-1" placeholder="Permission (e.g. view_dashboard)" value={title} onChange={e => setTitle(e.target.value)} />
           <button onClick={() => { setOpenForm(false); setEditingId(null); }} className="text-sm font-semibold text-gray-500">Cancel</button>
-          <button onClick={handleSave} className="px-4 py-2 text-sm font-semibold bg-[#C8860A] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
+          <button onClick={handleSave} className="px-4 py-2 text-sm font-semibold bg-[#ED1C24] text-white rounded-lg">{editingId ? 'Update' : 'Save'}</button>
         </div>
       )}
 
@@ -408,7 +405,7 @@ function PermissionsTab({ permissions, currentUserRole }: { permissions: any[], 
         <tbody className="divide-y divide-gray-100">
           {permissions.map(p => (
             <tr key={p.id} className="hover:bg-gray-50/50">
-              <td className="px-4 py-3 font-medium text-[#C8860A]">{p.title}</td>
+              <td className="px-4 py-3 font-medium text-[#ED1C24]">{p.title}</td>
               <td className="px-4 py-3 text-gray-500">{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '-'}</td>
               <td className="px-4 py-3 text-right">
                 <div className="flex items-center justify-end gap-1">
