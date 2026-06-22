@@ -266,11 +266,13 @@ export default function HomePage() {
                         <option value="Outdoor Live Dosa Party">Outdoor Live Dosa Party</option>
                       </optgroup>
                       <optgroup label="── Extras ──">
-                        {(EXTRAS || []).map((extra, idx) => (
-                          <option key={idx} value={extra.name}>
-                            {extra.name} — £{extra.price}
-                          </option>
-                        ))}
+                        {(EXTRAS || [])
+                          .filter((extra) => extra.name === 'Gazebo Hire (Flat Fee)')
+                          .map((extra, idx) => (
+                            <option key={idx} value={extra.name}>
+                              {extra.name} — £{extra.price}
+                            </option>
+                          ))}
                       </optgroup>
                     </select>
                   </div>
@@ -362,6 +364,7 @@ export default function HomePage() {
             {([
               { id: 'packages', label: '🎁 Packages' },
               { id: 'menu', label: '🍛 Menu Items' },
+              { id: 'live', label: '🍳 Live Dosa Menu' },
             ] as { id: MenuTab; label: string }[]).map((tab) => (
               <button
                 key={tab.id}
@@ -404,14 +407,20 @@ export default function HomePage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
 
-              {/* ─── LIVE DOSA PARTY (MOVED HERE) ─── */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 max-w-4xl mx-auto w-full mt-12">
+          {/* ─── LIVE DOSA MENU ─── */}
+          {activeMenuTab === 'live' && (
+            <div className="space-y-8">
+              {/* ─── LIVE DOSA PARTY ─── */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 max-w-4xl mx-auto w-full">
                 <div className="text-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">{LIVE_DOSA_PARTY_MENU.title}</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">Live Dosa Menu</h3>
                   {LIVE_DOSA_PARTY_MENU.pricing.map((p: string, i: number) => (
                     <p key={i} className="text-sm font-semibold text-gray-700 mb-1">{p}</p>
                   ))}
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Gazebo Hire (Flat Fee) £100.00</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="border border-yellow-500 rounded-xl p-4">
@@ -438,22 +447,21 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* ─── EXTRAS (MOVED HERE) ─── */}
+              {/* ─── EXTRAS ─── */}
               <div className="bg-white rounded-2xl border border-yellow-500 shadow-sm p-6 max-w-4xl mx-auto w-full mt-8">
                 <div className="text-center mb-4 text-sm font-bold text-gray-800">
                   MINIMUM 2 HRS SERVICE<br/>
                   Extras Are Charged Per Person Basis (Unless Stated Otherwise)
                 </div>
                 <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-700">
-                  {EXTRAS.map((extra: any, idx: number) => (
+                  {EXTRAS.filter((e: any) => e.name !== 'Gazebo Hire (Flat Fee)').map((extra: any, idx: number, arr: any[]) => (
                     <span key={idx} className="font-medium">
                       {extra.name} £{extra.price.toFixed(2)}
-                      {idx < EXTRAS.length - 1 && <span className="mx-2 text-yellow-500">|</span>}
+                      {idx < arr.length - 1 && <span className="mx-2 text-yellow-500">|</span>}
                     </span>
                   ))}
                 </div>
               </div>
-
             </div>
           )}
 
