@@ -8,8 +8,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Madras Flavours Events — Banquet & Catering Management',
-  description: 'Madras Flavours Events helps you plan and manage unforgettable banquet events and catering services with ease.',
+  title: 'Madras Flavours Events — Outdoor Catering Management',
+  description: 'Madras Flavours Events helps you plan and manage unforgettable outdoor catering services with ease.',
   icons: {
     icon: [
       { url: '/assets/images/logomf.png', type: 'image/png' }

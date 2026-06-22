@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
-import { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
+import { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import AccessControl from '@/components/admin/AccessControl';
 
 // --- MOCK FIREBASE FOR PROTOTYPE ---
@@ -349,7 +349,7 @@ export default function AdminPage() {
   });
 
   const [venueDetails, setVenueDetails] = useState({
-    venueName: 'Madras Flavours Banquet Hall',
+    venueName: 'Madras Flavours Events',
     maxCapacity: '500',
     contactEmail: 'hello@madrasflavoursevents.com',
     phone: '+44 7700 900000',
@@ -403,7 +403,6 @@ export default function AdminPage() {
   });
 
   // Editable venue/table/kids
-  const [editableVenueCharges, setEditableVenueCharges] = useState(VENUE_HALL_CHARGES.map(v => ({ ...v })));
   const [editableTableService, setEditableTableService] = useState(TABLE_SERVICE.map(t => ({ ...t })));
   const [editableKidsPricing, setEditableKidsPricing] = useState(KIDS_PRICING.map(k => ({ ...k })));
   const [editableDryHirePrices, setEditableDryHirePrices] = useState(DRY_HIRE_PRICES.map(p => ({ ...p })));
@@ -450,7 +449,6 @@ export default function AdminPage() {
         },
         LIVE_COUNTER_PACKAGE: editableLiveCounter,
         BANQUET_PACKAGES: editableBanquetPackages,
-        VENUE_HALL_CHARGES: editableVenueCharges,
         TABLE_SERVICE: editableTableService,
         KIDS_PRICING: editableKidsPricing,
         DRY_HIRE_PRICES: editableDryHirePrices,
@@ -488,9 +486,6 @@ export default function AdminPage() {
       text += `🥖 *Breads:* ${(MENU_CATEGORIES.breads || []).join(', ')}\n\n`;
       text += `🍲 *Dhal:* ${(MENU_CATEGORIES.dhal || []).join(', ')}\n\n`;
       text += `🍮 *Dessert:* ${(MENU_CATEGORIES.dessert || []).join(', ')}\n\n`;
-    } else if (menuType === 'Venue Hall Charges') {
-      text += editableVenueCharges.map(row => `• *${row.day}:* ${row.charge} ${row.note ? `(${row.note})` : ''}`).join('\n') + '\n\n';
-      text += `🍷 *ALCOHOL:*\nCorkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.\n\n`;
     } else if (menuType === 'Dry Hire') {
       text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
     } else if (menuType === 'Kids Pricing') {
@@ -508,6 +503,71 @@ export default function AdminPage() {
     return buildWhatsAppLink(customerPhone, text);
   };
 
+  const buildStep1EnquiryWhatsAppText = (booking: Booking) => {
+    let text = `Hi ${booking.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events for your *${booking.eventType}* on *${booking.date || 'TBD'}*!\n\n`;
+    text += `Here are our packages & pricing details:\n\n`;
+    
+    // 1. Packages
+    text += `🎁 *Outdoor Catering Packages:*\n`;
+    text += editableBanquetPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}/person\n  🥗 Starters: ${p.starters.veg} Veg + ${p.starters.nonVeg} Non-Veg | 🍛 Mains: ${p.mains.veg} Veg + ${p.mains.nonVeg} Non-Veg | 🍮 Desserts: ${p.desserts.join(', ')}`).join('\n\n') + '\n\n';
+    
+    // 2. Live Dosa Counter
+    text += `🎪 *Outdoor Live Dosa Counter:*\n`;
+    text += `• Weekday (Mon-Fri, min 35 guests): £11.00/person\n`;
+    text += `• Weekend & Holidays (min 40 guests): £12.00/person\n`;
+    text += `  Includes: Dosa (Masala, Plain, Ghee, Chilli), Idli, Vada, Sambar, and Chutneys.\n\n`;
+    
+    // 3. Extras
+    text += `✨ *Extras Available:*\n`;
+    text += EXTRAS.map((e: any) => `• ${e.name}: £${e.price.toFixed(2)}${e.name === 'Gazebo Hire' ? ' (Flat Fee)' : ' per person'}`).join('\n') + '\n\n';
+    
+    // 4. Kids Pricing
+    text += `🧒 *Kids Pricing* (Over 50 Adults):\n`;
+    text += editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n') + '\n\n';
+    
+    text += `Please let us know your preferred options, estimated guest count, and any customizations you would like! 🙏`;
+    
+    return buildWhatsAppLink(booking.phone, text);
+  };
+
+  const buildStep3MenuSelectedWhatsAppText = (booking: Booking) => {
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    
+    let extrasText = '';
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    if (extraChargesTotal > 0) {
+      extrasText = '\n*➕ Selected Extras & Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
+    }
+
+    const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+    const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+
+    const guestBreakdown = `• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0`;
+
+    const grandTotal = getTotalAmount(booking);
+    
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! We have confirmed your selections. Here is your detailed breakdown:\n\n*📋 Booking Summary:*\n• Package: ${booking.selectedMenu || booking.package}\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}\n• Grand Total: *£${grandTotal.toLocaleString()}* (Excl. VAT)\n• Deposit Required (30%): *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
+  };
+
+  const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const grandTotal = getTotalAmount(booking);
+    const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! 🥳 Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*💰 Payments Summary:*\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
+  };
+
+  const buildStep7FinalPaymentReceivedWhatsAppText = (booking: Booking) => {
+    const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const grandTotal = getTotalAmount(booking);
+    const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! 🥳 Your booking account is now settled.\n\n*💰 Payments Summary:*\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
+  };
+
   const buildCompletedWhatsAppText = (booking: Booking) => {
     const total = getTotalAmount(booking).toLocaleString();
     const deposit = booking.deposit.toLocaleString();
@@ -519,8 +579,6 @@ export default function AdminPage() {
       discountText = `\n• Discount (${booking.discount.reason}): -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
-    const hallCharge = getVenueHallCharge(booking.date, booking.time);
-    const hallText = hallCharge ? `\n• ${hallCharge.label}: £${hallCharge.amount.toLocaleString()}` : '';
 
     let extrasText = '';
     if (extraChargesTotal > 0) {
@@ -549,7 +607,7 @@ ${guestBreakdown}
 • Total Guests: ${adults + kids4to10 + kidsUnder4}${extrasText}
 
 *💰 Final Invoice Details:*
-• Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}${hallText}
+• Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}
 • Grand Total: £${total}
 
 *💳 Payments Received:*
@@ -572,8 +630,6 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       discountText = `\n\n*🏷️ Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
-    const hallCharge = getVenueHallCharge(booking.date, booking.time);
-    const hallText = hallCharge ? `\n\n*🏛️ ${hallCharge.label}:* £${hallCharge.amount.toLocaleString()}` : '';
 
     const dueDateText = booking.dueDate ? `\n\n*⏰ Payment Due By:* ${booking.dueDate}` : '';
 
@@ -607,7 +663,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${hallText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -1214,33 +1270,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return b.discount.value;
   };
 
-  const getVenueHallCharge = (date: string, time: string): { label: string; amount: number } | null => {
-    if (!date || date === 'N/A') return null;
-    const d = new Date(date);
-    const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const timeLower = (time || '').toLowerCase();
-    const isDinner = timeLower.includes('dinner') || timeLower.includes('evening') || timeLower.includes('pm');
-
-    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-      // Mon–Thu: £100
-      return { label: 'Venue Hall Hire (Mon–Thu)', amount: 100 };
-    } else if (dayOfWeek === 5) {
-      // Friday: £250
-      return { label: 'Venue Hall Hire (Friday)', amount: 250 };
-    } else if (dayOfWeek === 0) {
-      // Sunday: £250
-      return { label: 'Venue Hall Hire (Sunday)', amount: 250 };
-    } else if (dayOfWeek === 6) {
-      // Saturday: Lunch=£250, Dinner=£500
-      if (isDinner) {
-        return { label: 'Venue Hall Hire (Saturday Dinner)', amount: 500 };
-      } else {
-        return { label: 'Venue Hall Hire (Saturday Lunch)', amount: 250 };
-      }
-    }
-    return null;
-  };
-
   const getFoodPackageTotal = (b: Booking) => {
     const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     return subtotal - getDiscountAmount(b);
@@ -1248,8 +1277,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const getTotalAmount = (b: Booking) => {
     const food = getFoodPackageTotal(b);
-    const hall = getVenueHallCharge(b.date, b.time);
-    return food + (hall?.amount || 0);
+    return food;
   };
 
   const downloadInvoicePDF = (booking: Booking) => {
@@ -1263,7 +1291,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
     const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
-    const hallCharge = getVenueHallCharge(booking.date, booking.time);
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
@@ -1359,7 +1386,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             font-size: 13px;
           }
           .logo {
-            max-height: 50px;
+            max-height: 80px;
             object-fit: contain;
           }
           .grid-2 {
@@ -1548,12 +1575,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </td>
               <td class="text-right" style="vertical-align: middle;">£${booking.baseAmount.toLocaleString()}</td>
             </tr>
-            ${hallCharge ? `
-            <tr>
-              <td>🏛️ ${hallCharge.label}</td>
-              <td class="text-right">£${hallCharge.amount.toLocaleString()}</td>
-            </tr>
-            ` : ''}
             ${extrasRows}
           </tbody>
         </table>
@@ -1563,7 +1584,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <tbody>
             <tr>
               <td>Subtotal:</td>
-              <td class="text-right">£${(booking.baseAmount + (hallCharge?.amount || 0) + extraChargesTotal).toLocaleString()}</td>
+              <td class="text-right">£${(booking.baseAmount + extraChargesTotal).toLocaleString()}</td>
             </tr>
             ${booking.discount ? `
             <tr>
@@ -1572,7 +1593,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             </tr>
             ` : ''}
             <tr class="grand-total">
-              <td>Grand Total (Incl. Hall):</td>
+              <td>Grand Total:</td>
               <td class="text-right">£${grandTotal.toLocaleString()}</td>
             </tr>
             
@@ -1806,7 +1827,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <img
               src="/assets/images/logomf.png"
               alt="Madras Flavours Events logo"
-              style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
+              style={{ maxHeight: '90px', width: 'auto', objectFit: 'contain' }}
               className="mb-1"
             />
             <p className="text-sm text-gray-400 mt-1">Admin Portal</p>
@@ -1855,7 +1876,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <img
               src="/assets/images/logomf.png"
               alt="Madras Flavours Events logo"
-              style={{ maxHeight: '40px', width: 'auto', objectFit: 'contain' }}
+              style={{ maxHeight: '60px', width: 'auto', objectFit: 'contain' }}
             />
             <div className="text-xs mt-1" style={{ color: '#A08060' }}>Admin Dashboard</div>
           </div>
@@ -1997,7 +2018,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <div className="text-sm font-medium text-gray-900 truncate">{b.name}</div>
                           <div className="text-xs text-gray-400">{b.eventType} · {b.date} · {b.guests} guests</div>
                         </div>
-                        <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events! We'd love to help with your ${b.eventType}. Could you confirm your preferred date and guest count?`)} target="_blank" rel="noopener noreferrer"
+                        <a href={buildStep1EnquiryWhatsAppText(b)} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={13} />
@@ -2108,7 +2129,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <a href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events! We'd love to help with your ${b.eventType} on ${b.date}. Let me share our menu packages with you shortly.`)}
+                    <a href={buildStep1EnquiryWhatsAppText(b)}
                       target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
                       style={{ background: '#25D366', color: 'white' }}>
@@ -2503,7 +2524,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {/* Menu Sub-tabs */}
               <div className="flex flex-wrap gap-2">
                 {([
-                  { id: 'banquet', label: '🎁 Banquet Packages' },
+                  { id: 'banquet', label: '🎁 Outdoor Catering Packages' },
                   { id: 'indian', label: '🍛 Indian Menu' },
                   { id: 'srilankan', label: '🌴 Sri Lankan Menu' },
                   { id: 'live', label: '🎪 Live Counter' },
@@ -2516,7 +2537,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ))}
               </div>
 
-              {/* ─── BANQUET PACKAGES ─── */}
+              {/* ─── OUTDOOR CATERING PACKAGES ─── */}
               {adminMenuTab === 'banquet' && (
                 <div className="space-y-4">
                   {editableBanquetPackages.map((pkg) => (
@@ -2604,7 +2625,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="flex flex-wrap gap-2">
                               {enquiries.concat(activeBookings).slice(0, 4).map((b) => (
                                 <a key={b.id}
-                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
+                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
                                   target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                                   style={{ background: '#25D366', color: 'white' }}>
@@ -2622,22 +2643,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </div>
                   ))}
 
-                  {/* Venue Hall Charges */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOffice2Icon" size={16} style={{ color: '#ED1C24' }} />
-                      Venue Hall Charges
-                    </h3>
-                    <div className="space-y-2">
-                      {editableVenueCharges.map((row, i) => (
-                        <div key={i} className="flex items-center gap-3 flex-wrap">
-                          <input type="text" value={row.day} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                          <input type="text" value={row.charge} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, charge: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
-                          <input type="text" value={row.note} onChange={(e) => setEditableVenueCharges(prev => prev.map((r, idx) => idx === i ? { ...r, note: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-500" placeholder="Note" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
 
                   {/* Dry Hire Prices */}
                   <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -3945,6 +3950,29 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
               {/* ── STEP-SPECIFIC PANELS ── */}
 
+              {/* Step 1: Send Packages & Extras via WhatsApp */}
+              {selectedBooking.status === 'new_enquiry' && (
+                <div className="border border-red-200 rounded-xl p-4 bg-red-50/50 space-y-3">
+                  <div className="text-xs font-semibold text-red-800 uppercase tracking-wide flex items-center gap-1.5">
+                    <Icon name="InboxIcon" size={14} style={{ color: '#ED1C24' }} />
+                    Step 1: Send Packages & Extras List to Customer
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Send the customer our complete list of Outdoor Catering packages, live counter pricing, and extras to start the discussion.
+                  </p>
+                  <a
+                    href={buildStep1EnquiryWhatsAppText(selectedBooking)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
+                    style={{ background: '#25D366', color: 'white' }}
+                  >
+                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                    Send Packages & Extras via WhatsApp
+                  </a>
+                </div>
+              )}
+
               {/* Select Package Block */}
               {(selectedBooking.status === 'menu_sent' || selectedBooking.status === 'menu_selected') && (
                 <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/50">
@@ -3954,7 +3982,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1">Select Banquet Package</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Select Outdoor Catering Package</label>
                       <select
                         value={selectedBooking.selectedMenu || selectedBooking.package || ''}
                         onChange={async (e) => {
@@ -4303,7 +4331,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🏢 *Venue Hire Charges:*\n${editableVenueCharges.map(vc => `• ${vc.day}: ${vc.charge}${vc.note ? ` (${vc.note})` : ''}`).join('\\n')}\n\n🎪 *Extras Available:*\n${EXTRAS.map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${EXTRAS.map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -4338,13 +4366,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <Icon name="ChatBubbleLeftRightIcon" size={12} />
                           Extras
                         </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Venue Hall Charges', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Venue Hall Charges
-                        </a>
                         <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Dry Hire', selectedBooking.guests)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
@@ -4362,6 +4383,29 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Step 3: Send Selection Confirmation via WhatsApp */}
+              {selectedBooking.status === 'menu_selected' && (
+                <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50/50 space-y-3">
+                  <div className="text-xs font-semibold text-indigo-800 uppercase tracking-wide flex items-center gap-1.5">
+                    <Icon name="ListBulletIcon" size={14} style={{ color: '#6366F1' }} />
+                    Step 3: Send Selected Package & Deposit Details to Customer
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Send a summary of the customer's selected package, extras, and the deposit amount due.
+                  </p>
+                  <a
+                    href={buildStep3MenuSelectedWhatsAppText(selectedBooking)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
+                    style={{ background: '#25D366', color: 'white' }}
+                  >
+                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                    Send Selection Confirmation via WhatsApp
+                  </a>
                 </div>
               )}
 
@@ -4570,6 +4614,30 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   )}
                 </div>
               )}
+
+              {/* Step 5: Send Deposit Confirmation Receipt */}
+              {selectedBooking.status === 'deposit_confirmed' && (
+                <div className="border border-emerald-200 rounded-xl p-4 bg-emerald-50/50 space-y-3 mt-3">
+                  <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                    <Icon name="CheckCircleIcon" size={14} style={{ color: '#059669' }} />
+                    Step 5: Send Deposit Confirmation Receipt
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Send a receipt message confirming that their deposit has been received and the date is locked.
+                  </p>
+                  <a
+                    href={buildStep5DepositConfirmedWhatsAppText(selectedBooking)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
+                    style={{ background: '#25D366', color: 'white' }}
+                  >
+                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                    Send Deposit Receipt via WhatsApp
+                  </a>
+                </div>
+              )}
+
 
               {/* Step: Extra Charges — only show after event is scheduled */}
               {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
@@ -4887,18 +4955,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     );
                   })()}
 
-                  {/* Venue Hall Charge based on date */}
-                  {(() => {
-                    const hallCharge = getVenueHallCharge(selectedBooking.date, selectedBooking.time);
-                    if (!hallCharge) return null;
-                    return (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">🏛️ {hallCharge.label}</span>
-                        <span className="font-semibold text-indigo-700">£{hallCharge.amount.toLocaleString()}</span>
-                      </div>
-                    );
-                  })()}
-
                   {selectedBooking.extraCharges && selectedBooking.extraCharges.length > 0 && (
                     <div className="space-y-1">
                       <div className="text-xs font-semibold text-gray-500 mt-2 mb-1">Extras</div>
@@ -5106,16 +5162,36 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
               )}
               {selectedBooking.status === 'final_payment_received' && (
-                <button onClick={() => updateStatus(selectedBooking.id, 'event_scheduled')}
-                  className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                  <Icon name="CalendarIcon" size={16} />
-                  Schedule Event & Add to Calendar
-                </button>
+                <div className="space-y-2 w-full">
+                  <div className="border border-emerald-200 rounded-xl p-4 bg-emerald-50/50 space-y-3 mb-3">
+                    <div className="text-xs font-semibold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                      <Icon name="CheckCircleIcon" size={14} style={{ color: '#059669' }} />
+                      Step 7: Send Final Payment Confirmation
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Send a WhatsApp message confirming receipt of the final payment.
+                    </p>
+                    <a
+                      href={buildStep7FinalPaymentReceivedWhatsAppText(selectedBooking)}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
+                      style={{ background: '#25D366', color: 'white' }}
+                    >
+                      <Icon name="ChatBubbleLeftRightIcon" size={16} />
+                      Send Final Receipt via WhatsApp
+                    </a>
+                  </div>
+                  <button onClick={() => updateStatus(selectedBooking.id, 'event_scheduled')}
+                    className="w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
+                    <Icon name="CalendarIcon" size={16} />
+                    Schedule Event & Add to Calendar
+                  </button>
+                </div>
               )}
               {selectedBooking.status === 'event_scheduled' && (
                 <div className="space-y-2">
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Madras Flavours Events is coming up on *${selectedBooking.date}* at ${selectedBooking.time}. We look forward to seeing you! 🎉`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Madras Flavours Events is coming up on *${selectedBooking.date}* at *${selectedBooking.time}*!\n\n📌 *Important Setup Requirements:*\n• Customers must provide two serving tables (4ft x 4ft) and one power point.\n\nWe look forward to seeing you and serving your guests! 🎉`)}
                     target="_blank" rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl"
                     style={{ background: '#25D366', color: 'white' }}>

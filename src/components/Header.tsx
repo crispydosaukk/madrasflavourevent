@@ -19,10 +19,10 @@ const Header: React.FC<HeaderProps> = () => {
           <Image
             src="/assets/images/logomf.png"
             alt="Madras Flavours Events logo"
-            width={120}
-            height={48}
+            width={180}
+            height={72}
             className="object-contain"
-            style={{ maxHeight: '48px', width: 'auto' }}
+            style={{ maxHeight: '72px', width: 'auto' }}
           />
         </a>
 

@@ -154,15 +154,10 @@ export const EXTRAS = [
   { name: 'Choley Batura', price: 3.00 },
   { name: 'Gulab Jamun (1 pc per person)', price: 1.00 },
   { name: 'Rasmalai (per pc)', price: 1.00 },
-  { name: 'Pineapple or Banana Kesari (per person)', price: 1.00 }
+  { name: 'Pineapple or Banana Kesari (per person)', price: 1.00 },
+  { name: 'Gazebo Hire (Flat Fee)', price: 100.00 }
 ];
 
-export const VENUE_HALL_CHARGES = [
-  { day: 'Monday to Thursday', charge: '£100 + Food Packages', note: '' },
-  { day: 'Friday & Sunday Hall Hire', charge: '£250 + Food Packages', note: 'Lunch + Dinner' },
-  { day: 'Saturday Hall Hire', charge: '£250 + Food Packages', note: 'Lunch' },
-  { day: 'Saturday Hall Hire', charge: '£500 + Food Packages', note: 'Dinner' },
-];
 
 export const TABLE_SERVICE = [
   { service: 'Canapés Service', price: '£3 per person' },
@@ -227,7 +222,7 @@ export const TERMS_AND_CONDITIONS = {
   },
   notes: [
     'Minimum Number of Guests will be charged as agreed.',
-    'As per our policy and food safety, we don\'t allow any food takeaway from Banquet Venue.',
+    'As per our policy and food safety, we don\'t allow any food takeaway from the Event Venue.',
   ],
   alcohol: 'Corkage fee - Charges for outside Alcohol in Venue which will be discussed as per guests.',
 };

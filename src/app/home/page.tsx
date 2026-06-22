@@ -10,7 +10,6 @@ import {
   MENU_CATEGORIES as DEFAULT_MENU_CATEGORIES,
   LIVE_DOSA_PARTY_MENU as DEFAULT_LIVE_DOSA_PARTY_MENU,
   EXTRAS as DEFAULT_EXTRAS,
-  VENUE_HALL_CHARGES as DEFAULT_VENUE_HALL_CHARGES,
   TABLE_SERVICE as DEFAULT_TABLE_SERVICE,
   KIDS_PRICING as DEFAULT_KIDS_PRICING,
   STANDARD_SETUP as DEFAULT_STANDARD_SETUP,
@@ -28,7 +27,6 @@ export default function HomePage() {
     MENU_CATEGORIES: DEFAULT_MENU_CATEGORIES,
     LIVE_DOSA_PARTY_MENU: DEFAULT_LIVE_DOSA_PARTY_MENU,
     EXTRAS: DEFAULT_EXTRAS,
-    VENUE_HALL_CHARGES: DEFAULT_VENUE_HALL_CHARGES,
     TABLE_SERVICE: DEFAULT_TABLE_SERVICE,
     KIDS_PRICING: DEFAULT_KIDS_PRICING,
     STANDARD_SETUP: DEFAULT_STANDARD_SETUP,
@@ -42,7 +40,50 @@ export default function HomePage() {
     depositPercentage: 30,
   });
 
-  const { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, VENUE_HALL_CHARGES, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
+  const { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
+
+  const faqs = [
+    {
+      question: "Do you bring all the cooking equipment for live dosa catering?",
+      answer: "Yes, we bring all the necessary cooking equipment, including the dosa tawa (griddle), gas burners, and cooking utensils. You do not need to provide any kitchen setup for cooking."
+    },
+    {
+      question: "Do you provide plates, spoons, and napkins?",
+      answer: "Yes, we provide standard disposable plates, spoons, and napkins as part of our package. For an upgraded premium experience, you can also opt for eco-friendly Palm Plates from our Extras list at £0.99 per person."
+    },
+    {
+      question: "How are the charges calculated for dosa catering?",
+      answer: "Charges are calculated on a per-person basis with a minimum guest requirement. Our weekday package (Monday to Friday) is £11.00 per person with a minimum of 35 guests. Our weekend and bank holiday package is £12.00 per person with a minimum of 40 guests."
+    },
+    {
+      question: "Is there a transportation fee for catering services?",
+      answer: "Yes, transportation charges may apply depending on the location of the event. Please share your event postcode when submitting your enquiry, and we will provide a precise transport quote."
+    },
+    {
+      question: "How long do you serve food at an event?",
+      answer: "Our standard live dosa counter service is for 2 hours. If you require food to be served for a longer duration, extra hours can be arranged in advance."
+    },
+    {
+      question: "What do customers need to provide for the setup?",
+      answer: "Customers must provide two serving tables (4ft x 4ft) and one power point."
+    },
+    {
+      question: "What is the payment policy for booking live dosa catering?",
+      answer: "We require a 30% deposit to secure your booking date. The remaining balance can be settled on or before the day of your event."
+    },
+    {
+      question: "Can I customize the menu with additional items?",
+      answer: "Absolutely! You can choose additional starters, mains, or desserts from our refined Extras list to customize the menu to your preference. These are charged on a per-person basis (unless stated otherwise)."
+    },
+    {
+      question: "Do you provide tents or gazebos for outdoor catering?",
+      answer: "Yes, we offer Gazebo Hire for a flat fee of £100.00 to protect the live counter setup from weather elements."
+    },
+    {
+      question: "Do your dishes contain allergens such as nuts or sesame?",
+      answer: "Some of our dishes may contain nuts, sesame, dairy, or other allergens. Please inform us of any severe food allergies or dietary restrictions when submitting your booking enquiry so we can prepare accordingly."
+    }
+  ];
 
   const [bookingForm, setBookingForm] = useState({
     name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
@@ -124,14 +165,14 @@ export default function HomePage() {
           {/* ── Left: Text content ── */}
           <div className="flex-1 text-center lg:text-left">
             <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5" style={{ background: 'rgba(237, 28, 36,0.2)', color: '#F5A623' }}>
-              Banquet &amp; Catering
+              Outdoor Catering
             </span>
             <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-4">
               Make Your Event<br />
               <span style={{ color: '#F5A623' }}>Unforgettable</span>
             </h1>
             <p className="text-lg mb-8 max-w-xl lg:mx-0 mx-auto" style={{ color: '#A08060' }}>
-              Authentic Indian &amp; Sri Lankan cuisine. Elegant banquet hall. Unforgettable events.
+              Experience authentic 100% pure vegetarian catering for all occasions
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
               <a href="#menus" className="text-white font-semibold px-8 py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
@@ -214,17 +255,15 @@ export default function HomePage() {
                       style={bookingForm.selectedPackage ? { borderColor: '#ED1C24', boxShadow: '0 0 0 1px rgba(237, 28, 36,0.3)' } : {}}
                     >
                       <option value="">No specific package – help me choose</option>
-                      <optgroup label="── Buffet Packages ──">
+                      <optgroup label="── Outdoor Catering Packages ──">
                         {NEW_PACKAGES.map((pkg) => (
                           <option key={pkg.id} value={pkg.name}>
                             {pkg.name} — £{pkg.pricePerPerson}/person
                           </option>
                         ))}
                       </optgroup>
-                      <optgroup label="── Venue & Hire ──">
-                        <option value="Venue Hall">Venue Hall</option>
-                        <option value="Dry Hire">Dry Hire</option>
-                        <option value="Kids Pricing">Kids Pricing</option>
+                      <optgroup label="── Live Dosa Party ──">
+                        <option value="Outdoor Live Dosa Party">Outdoor Live Dosa Party</option>
                       </optgroup>
                       <optgroup label="── Extras ──">
                         {(EXTRAS || []).map((extra, idx) => (
@@ -323,8 +362,6 @@ export default function HomePage() {
             {([
               { id: 'packages', label: '🎁 Packages' },
               { id: 'menu', label: '🍛 Menu Items' },
-              { id: 'live', label: '🎪 Live Dosa Party' },
-              { id: 'extras', label: '✨ Extras' },
             ] as { id: MenuTab; label: string }[]).map((tab) => (
               <button
                 key={tab.id}
@@ -368,23 +405,55 @@ export default function HomePage() {
                 ))}
               </div>
 
-              {/* Venue Hall Charges */}
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                <h3 className="text-xl font-bold text-gray-900 mb-4 text-center">"Venue" Hall Charges</h3>
-                <div className="overflow-x-auto mb-6">
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-gray-100">
-                      {VENUE_HALL_CHARGES.map((row: any, i: number) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="py-3 pr-4 font-semibold text-gray-800">{row.day}</td>
-                          <td className="py-3 font-bold text-right text-red-600">{row.charge}</td>
-                          {row.note && <td className="py-3 text-gray-500 italic text-xs text-right pl-2">({row.note})</td>}
-                        </tr>
+              {/* ─── LIVE DOSA PARTY (MOVED HERE) ─── */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 max-w-4xl mx-auto w-full mt-12">
+                <div className="text-center mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">{LIVE_DOSA_PARTY_MENU.title}</h3>
+                  {LIVE_DOSA_PARTY_MENU.pricing.map((p: string, i: number) => (
+                    <p key={i} className="text-sm font-semibold text-gray-700 mb-1">{p}</p>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-yellow-500 rounded-xl p-4">
+                    <ul className="space-y-2">
+                      {LIVE_DOSA_PARTY_MENU.items.slice(0, 6).map((item: string, idx: number) => (
+                        <li key={idx} className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="text-gray-400">🍳</span> {item}
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
+                    </ul>
+                  </div>
+                  <div className="border border-yellow-500 rounded-xl p-4">
+                    <ul className="space-y-2">
+                      {LIVE_DOSA_PARTY_MENU.items.slice(6).map((item: string, idx: number) => (
+                        <li key={idx} className="text-sm text-gray-700 flex items-center gap-2">
+                          <span className="text-gray-400">🍳</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="text-center mt-6 text-sm font-bold text-gray-800">
+                  MINIMUM 2 HRS SERVICE
                 </div>
               </div>
+
+              {/* ─── EXTRAS (MOVED HERE) ─── */}
+              <div className="bg-white rounded-2xl border border-yellow-500 shadow-sm p-6 max-w-4xl mx-auto w-full mt-8">
+                <div className="text-center mb-4 text-sm font-bold text-gray-800">
+                  MINIMUM 2 HRS SERVICE<br/>
+                  Extras Are Charged Per Person Basis (Unless Stated Otherwise)
+                </div>
+                <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-700">
+                  {EXTRAS.map((extra: any, idx: number) => (
+                    <span key={idx} className="font-medium">
+                      {extra.name} £{extra.price.toFixed(2)}
+                      {idx < EXTRAS.length - 1 && <span className="mx-2 text-yellow-500">|</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -418,61 +487,50 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* ─── LIVE DOSA PARTY ─── */}
-          {activeMenuTab === 'live' && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 max-w-4xl mx-auto">
-              <div className="text-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">{LIVE_DOSA_PARTY_MENU.title}</h3>
-                {LIVE_DOSA_PARTY_MENU.pricing.map((p: string, i: number) => (
-                  <p key={i} className="text-sm font-semibold text-gray-700 mb-1">{p}</p>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border border-yellow-500 rounded-xl p-4">
-                  <ul className="space-y-2">
-                    {LIVE_DOSA_PARTY_MENU.items.slice(0, 6).map((item: string, idx: number) => (
-                      <li key={idx} className="text-sm text-gray-700 flex items-center gap-2">
-                        <span className="text-gray-400">🍳</span> {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="border border-yellow-500 rounded-xl p-4">
-                  <ul className="space-y-2">
-                    {LIVE_DOSA_PARTY_MENU.items.slice(6).map((item: string, idx: number) => (
-                      <li key={idx} className="text-sm text-gray-700 flex items-center gap-2">
-                        <span className="text-gray-400">🍳</span> {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <div className="text-center mt-6 text-sm font-bold text-gray-800">
-                MINIMUM 2 HRS SERVICE
-              </div>
-            </div>
-          )}
-
-          {/* ─── EXTRAS ─── */}
-          {activeMenuTab === 'extras' && (
-            <div className="bg-white rounded-2xl border border-yellow-500 shadow-sm p-6 max-w-4xl mx-auto">
-              <div className="text-center mb-4 text-sm font-bold text-gray-800">
-                MINIMUM 2 HRS SERVICE<br/>
-                Extras Are Charged Per Person Basis
-              </div>
-              <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-700">
-                {EXTRAS.map((extra: any, idx: number) => (
-                  <span key={idx} className="font-medium">
-                    {extra.name} £{extra.price.toFixed(2)}
-                    {idx < EXTRAS.length - 1 && <span className="mx-2 text-yellow-500">|</span>}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
       </section>
+
+      {/* ─── FAQ SECTION ─── */}
+      <section id="faqs" className="py-16 px-4 md:px-6 bg-white border-t border-gray-100">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-10">
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-4 py-1.5 rounded-full mb-3" style={{ background: 'rgba(237, 28, 36,0.1)', color: '#ED1C24' }}>
+              Got Questions?
+            </span>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">Frequently Asked Questions</h2>
+            <p className="text-gray-500 max-w-xl mx-auto">Everything you need to know about our outdoor live dosa catering and booking policies.</p>
+          </div>
+
+          <div className="space-y-4">
+            {faqs.map((faq, index) => {
+              const isOpen = expandedSection === `faq-${index}`;
+              return (
+                <div key={index} className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all duration-200 hover:shadow-md">
+                  <button
+                    onClick={() => toggleSection(`faq-${index}`)}
+                    className="w-full px-6 py-5 flex items-center justify-between text-left font-semibold text-gray-800 hover:text-red-600 transition-colors"
+                  >
+                    <span>{faq.question}</span>
+                    <span className={`transform transition-transform duration-200 ${isOpen ? 'rotate-180 text-red-600' : 'text-gray-400'}`}>
+                      <Icon name="ChevronDownIcon" size={20} />
+                    </span>
+                  </button>
+                  <div
+                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                      isOpen ? 'max-h-[500px] border-t border-gray-100' : 'max-h-0'
+                    }`}
+                  >
+                    <div className="px-6 py-5 text-sm text-gray-600 leading-relaxed bg-gray-50/50">
+                      {faq.answer}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <Footer />
       {/* ─── CUSTOM ALERT MODAL ─── */}
       {customHomeAlert && (
