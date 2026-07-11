@@ -4,18 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/AppIcon';
 import { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import AccessControl from '@/components/admin/AccessControl';
+import MenusTabUI from '@/components/admin/MenusTabUI';
 
-// --- MOCK FIREBASE FOR PROTOTYPE ---
-const db = {};
-const doc = (db: any, ...args: any[]) => args.join('/');
-const setDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const signOut = async (...args: any[]) => {};
-const auth = {};
-const signInWithEmailAndPassword = async (auth: any, e: string, p: string) => {
-  if (e === 'admin@madrasflavoursevents.com' && p === 'admin') return true;
-  throw new Error('Invalid credentials');
-};
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth, db, storage } from '@/lib/firebase';
+import { collection, onSnapshot, query, where, orderBy, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -260,7 +254,7 @@ type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
-  const [bookings, setBookings] = useState<Booking[]>(SAMPLE_BOOKINGS);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isEditingBookingDate, setIsEditingBookingDate] = useState(false);
   const [isEditingEventType, setIsEditingEventType] = useState(false);
@@ -298,14 +292,62 @@ export default function AdminPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Prototype mode: use SAMPLE_BOOKINGS local data only
-    setBookings(SAMPLE_BOOKINGS);
+    const q = query(collection(db, 'booking_requests'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const liveBookings: Booking[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || 'Unknown',
+          email: data.email || 'N/A',
+          phone: data.phone || 'N/A',
+          eventType: data.eventType || 'N/A',
+          date: data.date || 'N/A',
+          time: data.timeOfDay || 'N/A',
+          guests: data.guests || 0,
+          adults: data.adults ?? undefined,
+          kids4to10: data.kids4to10 ?? 0,
+          kidsUnder4: data.kidsUnder4 ?? 0,
+          status: data.status || 'new_enquiry',
+          notes: data.message || '',
+          baseAmount: data.baseAmount || 0,
+          deposit: data.deposit || 0,
+          depositPaid: data.depositPaid || false,
+          finalPaymentPaid: data.finalPaymentPaid || false,
+          package: data.package || 'Not Selected',
+          selectedMenu: data.selectedMenu,
+          extraCharges: data.extraCharges || [],
+          paymentProofDeposit: data.paymentProofDeposit,
+          paymentProofFinal: data.paymentProofFinal,
+          paymentProofExtra: data.paymentProofExtra,
+          paymentMethodDeposit: data.paymentMethodDeposit,
+          paymentMethodFinal: data.paymentMethodFinal,
+          discount: data.discount,
+          discountRequest: data.discountRequest,
+          enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          dueDate: (() => {
+            if (data.dueDate) return data.dueDate;
+            if (data.date && data.date !== 'N/A') {
+              const evDate = new Date(data.date);
+              const today = new Date();
+              evDate.setDate(evDate.getDate() - 14);
+              return (evDate < today ? today : evDate).toISOString().split('T')[0];
+            }
+            return '';
+          })(),
+          updatedAt: data.updatedAt,
+          createdAt: data.createdAt,
+        } as Booking;
+      });
+      setBookings(liveBookings);
+    });
+    return () => unsubscribe();
   }, []);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterEvent, setFilterEvent] = useState<string>('all');
   const [loggedIn, setLoggedIn] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [loginForm, setLoginForm] = useState({ email: 'admin@madrasflavoursevents.com', password: 'admin' });
+  const [loginForm, setLoginForm] = useState({ email: 'rahulbadugu22@gmail.com', password: '7981255989' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
@@ -313,11 +355,63 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
   useEffect(() => {
-    // Prototype mode: ready for login, setup Super Admin permissions
-    setLoggedIn(false);
-    setCurrentUser({ name: 'Prototype Admin', email: 'admin@madrasflavoursevents.com', role: 'Super Admin' });
-    setUserPermissions('all');
-    setLoadingAuth(false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Query by uid field (not document ID, since we use addDoc)
+          const usersQuery = query(collection(db, 'users'), where('uid', '==', user.uid));
+          const usersSnap = await getDocs(usersQuery);
+
+          if (!usersSnap.empty) {
+            // Found a managed user document
+            const userData = usersSnap.docs[0].data();
+            let roleName = 'Staff';
+            if (userData.roleId) {
+              const roleDoc = await getDoc(doc(db, 'roles', userData.roleId));
+              if (roleDoc.exists()) {
+                roleName = roleDoc.data().name || 'Staff';
+                const rolePermIds: string[] = roleDoc.data().permissionIds || [];
+                // Resolve permission IDs → title strings for sidebar filtering
+                const permTitles: string[] = [];
+                for (const permId of rolePermIds) {
+                  const permDoc = await getDoc(doc(db, 'permissions', permId));
+                  if (permDoc.exists()) {
+                    permTitles.push(permDoc.data().title);
+                  }
+                }
+                setUserPermissions(permTitles);
+              } else {
+                if (user.email === 'rahulbadugu22@gmail.com') setUserPermissions('all');
+                else setUserPermissions([]);
+              }
+            } else {
+              if (user.email === 'rahulbadugu22@gmail.com') setUserPermissions('all');
+              else setUserPermissions([]);
+            }
+            setCurrentUser({ name: userData.name || 'User', email: userData.email || user.email || '', role: roleName });
+          } else {
+            // No user doc found → original super admin
+            setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
+            setUserPermissions('all');
+          }
+        } catch (e) {
+          console.error("Error fetching permissions:", e);
+          setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
+          if (user.email === 'rahulbadugu22@gmail.com') {
+             setUserPermissions('all');
+          } else {
+             setUserPermissions([]);
+          }
+        }
+        setLoggedIn(true);
+      } else {
+        setLoggedIn(false);
+        setCurrentUser(null);
+        setUserPermissions([]);
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
   }, []);
   const [calendarMonth, setCalendarMonth] = useState(4);
   const [calendarYear] = useState(2026);
@@ -342,11 +436,32 @@ export default function AdminPage() {
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [blockDateInput, setBlockDateInput] = useState('');
 
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
+      const dates = snapshot.docs.map(doc => doc.id);
+      setBlockedDates(dates.sort());
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [bankDetails, setBankDetails] = useState({
     accountName: 'Madras Flavours Events Ltd',
     sortCode: '20-00-00',
     accountNumber: '12345678'
   });
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'bank_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBankDetails({
+          accountName: data.accountName || 'Madras Flavours Events Ltd',
+          sortCode: data.sortCode || '20-00-00',
+          accountNumber: data.accountNumber || '12345678'
+        });
+      }
+    });
+  }, []);
 
   const [venueDetails, setVenueDetails] = useState({
     venueName: 'Madras Flavours Events',
@@ -357,6 +472,22 @@ export default function AdminPage() {
     address: '123 Event Plaza, London, UK'
   });
 
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'venue_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setVenueDetails({
+          venueName: data.venueName || 'Madras Flavours Events',
+          maxCapacity: data.maxCapacity || '500',
+          contactEmail: data.contactEmail || 'hello@madrasflavoursevents.com',
+          phone: data.phone || '+44 7700 900000',
+          whatsapp: data.whatsapp || '+447700900000',
+          address: data.address || '123 Event Plaza, London, UK'
+        });
+      }
+    });
+  }, []);
+
   const [pricingDetails, setPricingDetails] = useState({
     depositPercentage: 30,
     minimumBookingHours: 4,
@@ -364,43 +495,29 @@ export default function AdminPage() {
     weekendRate: 550
   });
 
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPricingDetails({
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+          minimumBookingHours: data.minimumBookingHours || 4,
+          weekdayRate: data.weekdayRate || 350,
+          weekendRate: data.weekendRate || 550
+        });
+      }
+    });
+  }, []);
+
   // ─── REAL MENU EDITABLE STATE ─────────────────────────────────────────────
   type AdminMenuTab = 'banquet' | 'indian' | 'srilankan' | 'live';
   const [adminMenuTab, setAdminMenuTab] = useState<AdminMenuTab>('banquet');
 
-  // Editable banquet packages
-  const [editableBanquetPackages, setEditableBanquetPackages] = useState(
-    NEW_PACKAGES.map(pkg => ({ ...pkg, desserts: [], drinks: [], starters: {veg: 0, nonVeg: 0}, mains: {veg: 0, nonVeg: 0} }))
-  );
-  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
-  const [editingPackageData, setEditingPackageData] = useState<any | null>(null);
-
-  // Editable Indian menu
-  const [editableIndianMenu, setEditableIndianMenu] = useState({
-    vegStarters: [] as string[],
-    nonVegStarters: [] as string[],
-    vegMains: [] as string[],
-    nonVegMains: [] as string[],
-    sundries: [] as string[],
-    desserts: [] as string[],
-  });
-
-  // Editable Sri Lankan menu
-  const [editableSLMenu, setEditableSLMenu] = useState({
-    vegStarters: [] as string[],
-    nonVegStarters: [] as string[],
-    vegMains: [] as string[],
-    nonVegMains: [] as string[],
-    sundries: [] as string[],
-    desserts: [] as string[],
-  });
-
-  // Editable live counter
-  const [editableLiveCounter, setEditableLiveCounter] = useState({
-    srilankanSouthIndian: [] as any[],
-    northIndian: [] as any[],
-    extras: [] as any[],
-  });
+  // Editable Madras Flavours Menu States
+  const [editableNewPackages, setEditableNewPackages] = useState<any[]>(NEW_PACKAGES.map(pkg => ({ ...pkg })));
+  const [editableMenuCategories, setEditableMenuCategories] = useState<any>(JSON.parse(JSON.stringify(MENU_CATEGORIES)));
+  const [editableLiveDosaPartyMenu, setEditableLiveDosaPartyMenu] = useState<any>(JSON.parse(JSON.stringify(LIVE_DOSA_PARTY_MENU)));
+  const [editableExtras, setEditableExtras] = useState<any[]>(EXTRAS.map(ex => ({ ...ex })));
 
   // Editable venue/table/kids
   const [editableTableService, setEditableTableService] = useState(TABLE_SERVICE.map(t => ({ ...t })));
@@ -414,85 +531,62 @@ export default function AdminPage() {
 
 
 
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.NEW_PACKAGES) setEditableNewPackages(data.NEW_PACKAGES);
+        if (data.MENU_CATEGORIES) setEditableMenuCategories(data.MENU_CATEGORIES);
+        if (data.LIVE_DOSA_PARTY_MENU) setEditableLiveDosaPartyMenu(data.LIVE_DOSA_PARTY_MENU);
+        if (data.EXTRAS) setEditableExtras(data.EXTRAS);
+
+        // Keep the old venue/kids/hire prices from previous structure if they exist in a separate doc or same doc
+        if (data.TABLE_SERVICE) setEditableTableService(data.TABLE_SERVICE);
+        if (data.KIDS_PRICING) setEditableKidsPricing(data.KIDS_PRICING);
+        if (data.DRY_HIRE_PRICES) setEditableDryHirePrices(data.DRY_HIRE_PRICES);
+      }
+    });
+  }, []);
+
   const [isSavingMenus, setIsSavingMenus] = useState(false);
   const saveAllMenusToDatabase = async () => {
     setIsSavingMenus(true);
     try {
-      await setDoc(doc(db, 'site_data', 'menus'), {
-        INDIAN_MENU: {
-          name: 'Indian Menu',
-          starters: {
-            vegetarian: editableIndianMenu.vegStarters,
-            nonVegetarian: editableIndianMenu.nonVegStarters,
-          },
-          mains: {
-            vegetarian: editableIndianMenu.vegMains,
-            nonVegetarian: editableIndianMenu.nonVegMains,
-          },
-          sundries: editableIndianMenu.sundries,
-          desserts: editableIndianMenu.desserts,
-          allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-        },
-        SRI_LANKAN_MENU: {
-          name: 'Sri Lankan Menu',
-          starters: {
-            vegetarian: editableSLMenu.vegStarters,
-            nonVegetarian: editableSLMenu.nonVegStarters,
-          },
-          mains: {
-            vegetarian: editableSLMenu.vegMains,
-            nonVegetarian: editableSLMenu.nonVegMains,
-          },
-          sundries: editableSLMenu.sundries,
-          desserts: editableSLMenu.desserts,
-          allergyNotice: 'Food Prepared in our restaurant may contain following ingredients such as Milk, Egg, Wheat, Gluten, Crustaceans, Lupin, Mustard, Nuts, Sulphur',
-        },
-        LIVE_COUNTER_PACKAGE: editableLiveCounter,
-        BANQUET_PACKAGES: editableBanquetPackages,
+      const payload = JSON.parse(JSON.stringify({
+        NEW_PACKAGES: editableNewPackages,
+        MENU_CATEGORIES: editableMenuCategories,
+        LIVE_DOSA_PARTY_MENU: editableLiveDosaPartyMenu,
+        EXTRAS: editableExtras,
         TABLE_SERVICE: editableTableService,
         KIDS_PRICING: editableKidsPricing,
         DRY_HIRE_PRICES: editableDryHirePrices,
-      }, { merge: true });
+      }));
+
+      await setDoc(doc(db, 'site_data', 'menus'), payload, { merge: true });
       setCustomAlert({ message: 'Menus successfully updated on the website!', type: 'success' });
     } catch (error) {
       console.error(error);
-      setCustomAlert({ message: 'Error saving menus.', type: 'error' });
+      setCustomAlert({ message: 'Error saving menus: ' + (error instanceof Error ? error.message : String(error)), type: 'error' });
     } finally {
       setIsSavingMenus(false);
     }
   };
 
-  const startEditPackage = (pkg: any) => {
-    setEditingPackageId(pkg.id);
-    setEditingPackageData({ ...pkg, desserts: [...pkg.desserts], drinks: [...pkg.drinks] });
-  };
-
-  const saveEditPackage = () => {
-    if (!editingPackageData) return;
-    setEditableBanquetPackages(prev => prev.map(p => p.id === editingPackageData.id ? { ...editingPackageData } : p));
-    setEditingPackageId(null);
-    setEditingPackageData(null);
-  };
-
   const buildMenuWhatsAppText = (customerName: string, customerPhone: string, menuType: string, guestCount: number) => {
     let text = `Hi ${customerName}, here are our *${menuType}* options from Madras Flavours Events:\n\n`;
     if (menuType === 'Packages') {
-      text += editableBanquetPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}\n${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
+      text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}\n${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
     } else if (menuType === 'Menu Categories') {
-      text += `🥗 *Staters:* ${(MENU_CATEGORIES.staters || []).join(', ')}\n\n`;
-      text += `🍛 *Veg Mains:* ${(MENU_CATEGORIES.vegMains || []).join(', ')}\n\n`;
-      text += `🍚 *Rice & Noodles:* ${(MENU_CATEGORIES.riceAndNoodles || []).join(', ')}\n\n`;
-      text += `🧀 *Paneer Mains:* ${(MENU_CATEGORIES.paneerMains || []).join(', ')}\n\n`;
-      text += `🥖 *Breads:* ${(MENU_CATEGORIES.breads || []).join(', ')}\n\n`;
-      text += `🍲 *Dhal:* ${(MENU_CATEGORIES.dhal || []).join(', ')}\n\n`;
-      text += `🍮 *Dessert:* ${(MENU_CATEGORIES.dessert || []).join(', ')}\n\n`;
+      Object.keys(editableMenuCategories).forEach(catKey => {
+         text += `*${catKey.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}:*\n${(editableMenuCategories[catKey] || []).join(', ')}\n\n`;
+      });
     } else if (menuType === 'Dry Hire') {
       text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
     } else if (menuType === 'Kids Pricing') {
       text += `(Only Applies for over 50 Adults)\n\n`;
       text += editableKidsPricing.map(kp => `• *${kp.ageRange}:* ${kp.price}`).join('\n') + '\n\n';
     } else if (menuType === 'Extras') {
-      text += (EXTRAS || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
+      text += (editableExtras || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
     }
     
     if (menuType.includes('Menu') || menuType === 'Extras' || menuType === 'Packages') {
@@ -508,18 +602,17 @@ export default function AdminPage() {
     text += `Here are our packages & pricing details:\n\n`;
     
     // 1. Packages
-    text += `🎁 *Outdoor Catering Packages:*\n`;
-    text += editableBanquetPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}/person\n  🥗 Starters: ${p.starters.veg} Veg + ${p.starters.nonVeg} Non-Veg | 🍛 Mains: ${p.mains.veg} Veg + ${p.mains.nonVeg} Non-Veg | 🍮 Desserts: ${p.desserts.join(', ')}`).join('\n\n') + '\n\n';
+    text += `🎁 *Catering Packages:*\n`;
+    text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}/person\n  ${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
     
     // 2. Live Dosa Counter
     text += `🎪 *Outdoor Live Dosa Counter:*\n`;
-    text += `• Weekday (Mon-Fri, min 35 guests): £11.00/person\n`;
-    text += `• Weekend & Holidays (min 40 guests): £12.00/person\n`;
-    text += `  Includes: Dosa (Masala, Plain, Ghee, Chilli), Idli, Vada, Sambar, and Chutneys.\n\n`;
+    text += editableLiveDosaPartyMenu.pricing.join('\n') + '\n';
+    text += `Includes:\n${editableLiveDosaPartyMenu.items.join(', ')}\n\n`;
     
     // 3. Extras
     text += `✨ *Extras Available:*\n`;
-    text += EXTRAS.map((e: any) => `• ${e.name}: £${e.price.toFixed(2)}${e.name === 'Gazebo Hire' ? ' (Flat Fee)' : ' per person'}`).join('\n') + '\n\n';
+    text += editableExtras.map((e: any) => `• ${e.name}: £${e.price.toFixed(2)}`).join('\n') + '\n\n';
     
     // 4. Kids Pricing
     text += `🧒 *Kids Pricing* (Over 50 Adults):\n`;
@@ -534,7 +627,7 @@ export default function AdminPage() {
     const adults = booking.adults ?? booking.guests;
     const kids4to10 = booking.kids4to10 || 0;
     const kidsUnder4 = booking.kidsUnder4 || 0;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
     
     let extrasText = '';
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
@@ -591,7 +684,7 @@ export default function AdminPage() {
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-    const guestBreakdown = `• Adults: ${adults} × £${editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0}/person\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person\n• Kids (0-4 yrs): ${kidsUnder4} × Free`;
+    const guestBreakdown = `• Adults: ${adults} × £${editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0}/person\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person\n• Kids (0-4 yrs): ${kidsUnder4} × Free`;
 
     return `Hi ${booking.name.split(' ')[0]},
 
@@ -638,7 +731,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
 
     const guestBreakdown = `*👥 Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
 
@@ -695,12 +788,30 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     e.preventDefault();
     setIsLoggingIn(true);
     try {
-      await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+      try {
+        await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+      } catch (err: any) {
+        if (loginForm.email === 'rahulbadugu22@gmail.com') {
+           const { createUserWithEmailAndPassword } = await import('firebase/auth');
+           try {
+               await createUserWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+           } catch (createErr: any) {
+               if (createErr.code === 'auth/email-already-in-use') {
+                   // Account exists, but password was wrong.
+                   throw new Error('Account exists, but password is incorrect. (Try "password" instead of "7981255989"?)');
+               }
+               throw createErr;
+           }
+        } else {
+           throw err;
+        }
+      }
       setLoggedIn(true);
       setLoginError('');
-    } catch (error) {
+      if (typeof window !== 'undefined') localStorage.removeItem('adminBypass');
+    } catch (error: any) {
       console.error(error);
-      setLoginError('Invalid credentials. For this prototype, use admin@madrasflavoursevents.com / admin');
+      setLoginError(error?.message || 'Invalid credentials.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -981,16 +1092,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const confirmFinalPayment = async (id: string, method: string) => {
     const currentBooking = bookings.find(b => b.id === id);
-    const extraProof = currentBooking?.paymentProofFinal || '';
     
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method, paymentProofExtra: b.paymentProofExtra || extraProof } : b));
-    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method, paymentProofExtra: prev.paymentProofExtra || extraProof } : prev);
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : prev);
     try {
       await setDoc(doc(db, 'booking_requests', id), { 
         finalPaymentPaid: true, 
         status: 'final_payment_received', 
-        paymentMethodFinal: method, 
-        paymentProofExtra: currentBooking?.paymentProofExtra || extraProof 
+        paymentMethodFinal: method 
       }, { merge: true });
       if (currentBooking) {
         const bookingData = {
@@ -998,7 +1107,6 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           finalPaymentPaid: true,
           status: 'final_payment_received',
           paymentMethodFinal: method,
-          paymentProofExtra: currentBooking.paymentProofExtra || extraProof,
           updatedAt: new Date().toISOString()
         };
         const cleanBookingData = Object.fromEntries(
@@ -1290,7 +1398,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-    const pricePerPerson = editableBanquetPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
+    const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
@@ -1836,7 +1944,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Email Address</label>
-              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="admin@madrasflavoursevents.com" />
+              <input type="email" required value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" placeholder="rahulbadugu22@gmail.com" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Password</label>
@@ -1856,7 +1964,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               {isLoggingIn ? 'Signing In...' : 'Sign In to Dashboard'}
             </button>
             <div className="text-center mt-4 text-xs text-gray-500 bg-gray-50 py-2 rounded-lg border border-gray-100">
-              Prototype Login: <br/><strong className="text-gray-700">admin@madrasflavoursevents.com</strong> / <strong className="text-gray-700">admin</strong>
+              Please log in with your dashboard credentials.
             </div>
           </form>
         </div>
@@ -1909,6 +2017,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 setActiveTab('overview');
                 if (typeof window !== 'undefined') {
                   localStorage.removeItem('adminActiveTab');
+                  localStorage.removeItem('adminBypass');
                 }
                 setLoggedIn(false);
               } catch (error) {
@@ -2512,355 +2621,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
           {/* ─── MENUS ─── */}
           {activeTab === 'menus' && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-sm text-gray-500">Edit menus, packages, and prices. Send directly to customers via WhatsApp.</p>
-                <button onClick={saveAllMenusToDatabase} disabled={isSavingMenus} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl text-white shadow-md transition-all hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                  <Icon name="CloudArrowUpIcon" size={16} />
-                  {isSavingMenus ? 'Saving...' : 'Save Changes to Website'}
-                </button>
-              </div>
-
-              {/* Menu Sub-tabs */}
-              <div className="flex flex-wrap gap-2">
-                {([
-                  { id: 'banquet', label: '🎁 Outdoor Catering Packages' },
-                  { id: 'indian', label: '🍛 Indian Menu' },
-                  { id: 'srilankan', label: '🌴 Sri Lankan Menu' },
-                  { id: 'live', label: '🎪 Live Counter' },
-                ] as { id: AdminMenuTab; label: string }[]).map((tab) => (
-                  <button key={tab.id} onClick={() => setAdminMenuTab(tab.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${adminMenuTab === tab.id ? 'text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:border-yellow-400'}`}
-                    style={adminMenuTab === tab.id ? { background: 'linear-gradient(135deg, #ED1C24, #F5A623)' } : {}}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* ─── OUTDOOR CATERING PACKAGES ─── */}
-              {adminMenuTab === 'banquet' && (
-                <div className="space-y-4">
-                  {editableBanquetPackages.map((pkg) => (
-                    <div key={pkg.id} className="bg-white rounded-xl border border-gray-200 p-5">
-                      {editingPackageId === pkg.id && editingPackageData ? (
-                        /* Edit Mode */
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
-                            <div className="flex gap-2">
-                              <button onClick={saveEditPackage} className="text-xs font-semibold px-3 py-1.5 rounded-lg text-white" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>Save</button>
-                              <button onClick={() => { setEditingPackageId(null); setEditingPackageData(null); }} className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500">Cancel</button>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Price/Person (£)</label>
-                              <input type="number" value={editingPackageData.pricePerPerson} onChange={(e) => setEditingPackageData({ ...editingPackageData, pricePerPerson: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Veg Starters</label>
-                              <input type="number" value={editingPackageData.starters.veg} onChange={(e) => setEditingPackageData({ ...editingPackageData, starters: { ...editingPackageData.starters, veg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Non-Veg Starters</label>
-                              <input type="number" value={editingPackageData.starters.nonVeg} onChange={(e) => setEditingPackageData({ ...editingPackageData, starters: { ...editingPackageData.starters, nonVeg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Veg Mains</label>
-                              <input type="number" value={editingPackageData.mains.veg} onChange={(e) => setEditingPackageData({ ...editingPackageData, mains: { ...editingPackageData.mains, veg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Non-Veg Mains</label>
-                              <input type="number" value={editingPackageData.mains.nonVeg} onChange={(e) => setEditingPackageData({ ...editingPackageData, mains: { ...editingPackageData.mains, nonVeg: Number(e.target.value) } })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Min Guests</label>
-                              {/* @ts-ignore */}
-                              <input type="number" value={editingPackageData.minGuests ?? ''} onChange={(e) => setEditingPackageData({ ...editingPackageData, minGuests: e.target.value ? Number(e.target.value) : null })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="None" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-500 block mb-1">Max Guests</label>
-                              {/* @ts-ignore */}
-                              <input type="number" value={editingPackageData.maxGuests ?? ''} onChange={(e) => setEditingPackageData({ ...editingPackageData, maxGuests: e.target.value ? Number(e.target.value) : null })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="None" />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Desserts (one per line)</label>
-                            <textarea rows={3} value={editingPackageData.desserts.join('\n')} onChange={(e) => setEditingPackageData({ ...editingPackageData, desserts: e.target.value.split('\n').filter(Boolean) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Drinks (one per line)</label>
-                            <textarea rows={3} value={editingPackageData.drinks.join('\n')} onChange={(e) => setEditingPackageData({ ...editingPackageData, drinks: e.target.value.split('\n').filter(Boolean) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none" />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 block mb-1">Tag / Badge</label>
-                            <input type="text" value={editingPackageData.tag} onChange={(e) => setEditingPackageData({ ...editingPackageData, tag: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="e.g. Most Popular" />
-                          </div>
-                        </div>
-                      ) : (
-                        /* View Mode */
-                        <div>
-                          <div className="flex items-start justify-between mb-3">
-                            <div>
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <h3 className="font-semibold text-gray-900">{pkg.name}</h3>
-                                {pkg.tag && <span className="text-xs font-semibold px-2 py-0.5 rounded-full border" style={{ background: 'rgba(237, 28, 36,0.08)', color: '#ED1C24', borderColor: 'rgba(237, 28, 36,0.3)' }}>{pkg.tag}</span>}
-                              </div>
-                              <span className="text-lg font-bold" style={{ color: '#ED1C24' }}>£{pkg.pricePerPerson}<span className="text-sm font-normal text-gray-500">/person (Excl. VAT)</span></span>
-                              {pkg.guestLabel && <div className="text-xs text-gray-500 mt-0.5">{pkg.guestLabel}</div>}
-                            </div>
-                            <button onClick={() => startEditPackage(pkg)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-amber-50" style={{ borderColor: '#ED1C24', color: '#ED1C24' }}>
-                              <Icon name="PencilSquareIcon" size={14} />
-                              Edit
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                            <div className="bg-gray-50 rounded-lg p-2.5">
-                              <div className="text-xs text-gray-400 mb-0.5">Items Included</div>
-                              <div className="text-xs font-medium text-gray-700">{(pkg.items || []).length} items</div>
-                            </div>
-                          </div>
-                          <div className="border-t border-gray-100 pt-3">
-                            <p className="text-xs text-gray-500 mb-2 font-medium">📱 Send this package to a customer via WhatsApp:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {enquiries.concat(activeBookings).slice(0, 4).map((b) => (
-                                <a key={b.id}
-                                  href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${b.guests} guests, estimated total: *£${(pkg.pricePerPerson * b.guests).toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\nWould you like to go ahead with this package? Please reply to confirm! 🙏`)}
-                                  target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                                  style={{ background: '#25D366', color: 'white' }}>
-                                  <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                                  Send to {b.name.split(' ')[0]}
-                                </a>
-                              ))}
-                              {enquiries.concat(activeBookings).length === 0 && (
-                                <span className="text-xs text-gray-400 italic">No active customers to send to</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-
-                  {/* Dry Hire Prices */}
-                  <div className="bg-white rounded-xl border border-gray-200 p-5">
-                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                      <Icon name="BuildingOfficeIcon" size={16} style={{ color: '#ED1C24' }} />
-                      Dry Hire Prices
-                    </h3>
-                    <div className="space-y-2">
-                      {editableDryHirePrices.map((row, i) => (
-                        <div key={i} className="flex items-center gap-3 flex-wrap">
-                          <input type="text" value={row.day} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, day: e.target.value } : r))} className="flex-1 min-w-[160px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Day" />
-                          <input type="text" value={row.session} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, session: e.target.value } : r))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" placeholder="Session" />
-                          <input type="number" value={row.price} onChange={(e) => setEditableDryHirePrices(prev => prev.map((r, idx) => idx === i ? { ...r, price: Number(e.target.value) } : r))} className="flex-1 min-w-[120px] border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} placeholder="Price (£)" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Table Service & Kids Pricing */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">Table Service Charges</h3>
-                      <div className="space-y-2">
-                        {editableTableService.map((ts, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={ts.service} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, service: e.target.value } : t))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={ts.price} onChange={(e) => setEditableTableService(prev => prev.map((t, idx) => idx === i ? { ...t, price: e.target.value } : t))} className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">Kids Pricing</h3>
-                      <div className="space-y-2">
-                        {editableKidsPricing.map((kp, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={kp.ageRange} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, ageRange: e.target.value } : k))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <input type="text" value={kp.price} onChange={(e) => setEditableKidsPricing(prev => prev.map((k, idx) => idx === i ? { ...k, price: e.target.value } : k))} className="w-28 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold" style={{ color: '#ED1C24' }} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── INDIAN MENU EDITOR ─── */}
-              {adminMenuTab === 'indian' && (
-                <div className="space-y-4">
-                  {/* Send full Indian menu to customer */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Full Indian Menu to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Indian Menu', b.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Vegetarian Starters', key: 'vegStarters' as const },
-                    { label: 'Non-Vegetarian Starters', key: 'nonVegStarters' as const },
-                    { label: 'Vegetarian Mains', key: 'vegMains' as const },
-                    { label: 'Non-Vegetarian Mains', key: 'nonVegMains' as const },
-                    { label: 'Sundries', key: 'sundries' as const },
-                    { label: 'Desserts', key: 'desserts' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableIndianMenu[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item} onChange={(e) => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableIndianMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder={`Add new ${section.label.toLowerCase()} item...`} value={newMenuItemInput} onChange={(e) => setNewMenuItemInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <button onClick={() => { if (newMenuItemInput.trim()) { setEditableIndianMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ─── SRI LANKAN MENU EDITOR ─── */}
-              {adminMenuTab === 'srilankan' && (
-                <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Full Sri Lankan Menu to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildMenuWhatsAppText(b.name.split(' ')[0], b.phone, 'Sri Lankan Menu', b.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Vegetarian Starters', key: 'vegStarters' as const },
-                    { label: 'Non-Vegetarian Starters', key: 'nonVegStarters' as const },
-                    { label: 'Vegetarian Mains', key: 'vegMains' as const },
-                    { label: 'Non-Vegetarian Mains', key: 'nonVegMains' as const },
-                    { label: 'Sundries', key: 'sundries' as const },
-                    { label: 'Desserts', key: 'desserts' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableSLMenu[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item} onChange={(e) => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? e.target.value : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableSLMenu(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder={`Add new ${section.label.toLowerCase()} item...`} value={newMenuItemInput} onChange={(e) => setNewMenuItemInput(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' && newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <button onClick={() => { if (newMenuItemInput.trim()) { setEditableSLMenu(prev => ({ ...prev, [section.key]: [...prev[section.key], newMenuItemInput.trim()] })); setNewMenuItemInput(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ─── LIVE COUNTER EDITOR ─── */}
-              {adminMenuTab === 'live' && (
-                <div className="space-y-4">
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">📱 Send Live Counter Package to a Customer:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {enquiries.concat(activeBookings).slice(0, 5).map((b) => (
-                        <a key={b.id}
-                          href={buildWhatsAppLink(b.phone, `Hi ${b.name.split(' ')[0]}, here is our *Live Counter Package* from Madras Flavours Events:\n\n🎪 *Sri Lankan & South Indian:*\n${editableLiveCounter.srilankanSouthIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n🎪 *North Indian:*\n${editableLiveCounter.northIndian.map(i => `• ${i.name} — £${i.price.toFixed(2)}/person`).join('\n')}\n\n✨ *Extras:*\n${EXTRAS.map(i => `• ${i.name} — £${i.price.toFixed(2)}`).join('\n')}\n\nPlease let us know which items you'd like to add to your event! 🙏`)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Send to {b.name.split(' ')[0]}
-                        </a>
-                      ))}
-                      {enquiries.concat(activeBookings).length === 0 && <span className="text-xs text-gray-400 italic">No active customers</span>}
-                    </div>
-                  </div>
-
-                  {[
-                    { label: 'Sri Lankan & South Indian', key: 'srilankanSouthIndian' as const },
-                    { label: 'North Indian', key: 'northIndian' as const },
-                    { label: 'Extras', key: 'extras' as const },
-                  ].map((section) => (
-                    <div key={section.key} className="bg-white rounded-xl border border-gray-200 p-5">
-                      <h3 className="font-semibold text-gray-900 mb-3">{section.label}</h3>
-                      <div className="space-y-2 mb-3">
-                        {editableLiveCounter[section.key].map((item, i) => (
-                          <div key={i} className="flex items-center gap-2">
-                            <input type="text" value={item.name} onChange={(e) => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? { ...v, name: e.target.value } : v) }))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
-                            <div className="flex items-center gap-1">
-                              <span className="text-sm text-gray-500">£</span>
-                              <input type="number" step="0.01" value={item.price} onChange={(e) => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].map((v, idx) => idx === i ? { ...v, price: parseFloat(e.target.value) || 0 } : v) }))} className="w-20 border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none text-right" />
-                            </div>
-                            {currentUser?.role === 'Super Admin' && (
-                              <button onClick={() => setEditableLiveCounter(prev => ({ ...prev, [section.key]: prev[section.key].filter((_, idx) => idx !== i) }))} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                <Icon name="TrashIcon" size={14} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="Item name..." value={newLiveItemName} onChange={(e) => setNewLiveItemName(e.target.value)} className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50" />
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-gray-500">£</span>
-                          <input type="number" step="0.01" placeholder="0.00" value={newLiveItemPrice} onChange={(e) => setNewLiveItemPrice(e.target.value)} className="w-20 border border-dashed border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none bg-gray-50" />
-                        </div>
-                        <button onClick={() => { if (newLiveItemName.trim()) { setEditableLiveCounter(prev => ({ ...prev, [section.key]: [...prev[section.key], { name: newLiveItemName.trim(), price: parseFloat(newLiveItemPrice) || 0 }] })); setNewLiveItemName(''); setNewLiveItemPrice(''); } }}
-                          className="text-white text-sm font-semibold px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                          <Icon name="PlusIcon" size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <MenusTabUI 
+              packages={editableNewPackages} setPackages={setEditableNewPackages}
+              categories={editableMenuCategories} setCategories={setEditableMenuCategories}
+              liveMenu={editableLiveDosaPartyMenu} setLiveMenu={setEditableLiveDosaPartyMenu}
+              extras={editableExtras} setExtras={setEditableExtras}
+              tableService={editableTableService} setTableService={setEditableTableService}
+              kidsPricing={editableKidsPricing} setKidsPricing={setEditableKidsPricing}
+              dryHire={editableDryHirePrices} setDryHire={setEditableDryHirePrices}
+              save={saveAllMenusToDatabase}
+              isSaving={isSavingMenus}
+            />
           )}
 
           {/* ─── HISTORY ─── */}
@@ -3865,7 +3636,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           const currentPkg = selectedBooking.selectedMenu || selectedBooking.package;
                           if (currentPkg && currentPkg !== 'custom') {
-                            const found = editableBanquetPackages.find(p => p.name === currentPkg);
+                            const found = editableNewPackages.find(p => p.name === currentPkg);
                             if (found) {
                               baseAmount = found.pricePerPerson * val;
                               deposit = pricingDetails.depositPercentage;
@@ -4001,7 +3772,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             selectedPkgName = foundExtra.name;
                             baseAmount = foundExtra.price;
                           } else {
-                            const found = editableBanquetPackages.find(p => p.name === val);
+                            const found = editableNewPackages.find(p => p.name === val);
                             if (found) {
                               pricePerPerson = found.pricePerPerson;
                               selectedPkgName = found.name;
@@ -4060,7 +3831,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       >
                         <option value="">-- Choose Package --</option>
                         <optgroup label="Buffet Packages">
-                          {editableBanquetPackages.map(pkg => (
+                          {editableNewPackages.map(pkg => (
                             <option key={pkg.id} value={pkg.name}>
                               {pkg.name} (£{pkg.pricePerPerson}/person)
                             </option>
@@ -4156,7 +3927,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const guests = adults + kids4to10 + kidsUnder4;
                               
                               let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
                               if (found) pricePerPerson = found.pricePerPerson;
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -4189,7 +3960,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const guests = adults + kids4to10 + kidsUnder4;
                               
                               let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
                               if (found) pricePerPerson = found.pricePerPerson;
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -4222,7 +3993,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const guests = adults + kids4to10 + kidsUnder4;
                               
                               let pricePerPerson = 0;
-                              const found = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
+                              const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
                               if (found) pricePerPerson = found.pricePerPerson;
 
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -4316,7 +4087,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 <div className="border border-purple-200 rounded-xl p-4 bg-purple-50">
                   <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp</div>
                   <div className="space-y-2">
-                    {editableBanquetPackages.map((pkg) => {
+                    {editableNewPackages.map((pkg) => {
                       const adults = selectedBooking.adults ?? selectedBooking.guests;
                       const kids4to10 = selectedBooking.kids4to10 || 0;
                       const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
@@ -4331,7 +4102,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n🥗 Starters: ${pkg.starters.veg} Veg + ${pkg.starters.nonVeg} Non-Veg\n🍛 Mains: ${pkg.mains.veg} Veg + ${pkg.mains.nonVeg} Non-Veg\n🍮 Desserts: ${pkg.desserts.join(', ')}\n${pkg.drinks.length > 0 ? `🥤 Drinks: ${pkg.drinks.join(', ')}\n` : ''}${pkg.guestLabel ? `\n👥 ${pkg.guestLabel}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing* (Over 50 Adults):\n${editableKidsPricing.map(kp => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${EXTRAS.map(e => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n✨ *Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n👥 ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n🎁 ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -4926,7 +4697,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-                    const pricePerPerson = editableBanquetPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package))?.pricePerPerson || 0;
+                    const pricePerPerson = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package))?.pricePerPerson || 0;
                     const hasKids = kids4to10 > 0 || kidsUnder4 > 0;
                     return (
                       <div className="bg-white rounded-lg p-2.5 border border-gray-100 space-y-1 mb-1">

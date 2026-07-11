@@ -2,17 +2,21 @@
 import React, { useState, useEffect } from 'react';
 import Icon from '@/components/ui/AppIcon';
 
-// --- MOCK FIREBASE FOR PROTOTYPE ---
-const db = {};
-const doc = (db: any, ...args: any[]) => args.join('/');
-const addDoc = async (...args: any[]) => {};
-const updateDoc = async (...args: any[]) => {};
-const deleteDoc = async (...args: any[]) => {};
-const collection = (db: any, ...args: any[]) => args.join('/');
-const getDocs = async (...args: any[]) => ({ docs: [], empty: true });
-const onSnapshot = (coll: any, cb: any) => () => {};
-const getSecondaryAuth = () => ({});
-const createUserWithEmailAndPassword = async (...args: any[]) => ({ user: { uid: 'mock-uid' } });
+import { db, firebaseConfig } from '@/lib/firebase';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+
+// Initialize secondary auth for creating users without logging out
+const getSecondaryAuth = () => {
+  let app2;
+  try {
+    app2 = getApp('secondary');
+  } catch (e) {
+    app2 = initializeApp(firebaseConfig, 'secondary');
+  }
+  return getAuth(app2);
+};
 
 export default function AccessControl({ currentUserRole }: { currentUserRole?: string }) {
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'permissions'>('users');
@@ -39,7 +43,19 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
     const seedPermissions = async () => {
       try {
         const snap: any = await getDocs(collection(db, 'permissions'));
-        const existing = snap.docs.map((d: any) => d.data().title);
+        const existingDocs = snap.docs.map((d: any) => ({ id: d.id, title: d.data().title }));
+        
+        // Find duplicates and delete them
+        const seenTitles = new Set();
+        for (const d of existingDocs) {
+          if (seenTitles.has(d.title)) {
+            await deleteDoc(doc(db, 'permissions', d.id));
+          } else {
+            seenTitles.add(d.title);
+          }
+        }
+
+        const existing = Array.from(seenTitles);
         const DEFAULT_PERMISSIONS = [
           'manage_enquiries',
           'manage_bookings',
@@ -50,14 +66,17 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
           'manage_history',
           'manage_settings',
           'manage_access',
-          'manage_tracker'
+          'manage_tracker',
+          'manage_discounts'
         ];
+        
         for (const p of DEFAULT_PERMISSIONS) {
           if (!existing.includes(p)) {
             await addDoc(collection(db, 'permissions'), {
               title: p,
               createdAt: new Date().toISOString()
             });
+            existing.push(p);
           }
         }
       } catch (e) {

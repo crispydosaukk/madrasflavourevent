@@ -5,6 +5,8 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Icon from '@/components/ui/AppIcon';
+import { collection, addDoc, onSnapshot, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import {
   NEW_PACKAGES as DEFAULT_NEW_PACKAGES,
   MENU_CATEGORIES as DEFAULT_MENU_CATEGORIES,
@@ -34,11 +36,48 @@ export default function HomePage() {
     DRY_HIRE_PRICES: DEFAULT_DRY_HIRE_PRICES,
   });
 
-  const [blockedDates] = useState<string[]>([]);
+  const [blockedDates, setBlockedDates] = useState<string[]>([]);
 
-  const [pricingDetails] = useState({
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'menus'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMenus({
+          NEW_PACKAGES: data.NEW_PACKAGES || data.BANQUET_PACKAGES || DEFAULT_NEW_PACKAGES,
+          MENU_CATEGORIES: data.MENU_CATEGORIES || DEFAULT_MENU_CATEGORIES,
+          LIVE_DOSA_PARTY_MENU: data.LIVE_DOSA_PARTY_MENU || DEFAULT_LIVE_DOSA_PARTY_MENU,
+          EXTRAS: data.EXTRAS || DEFAULT_EXTRAS,
+          TABLE_SERVICE: data.TABLE_SERVICE || DEFAULT_TABLE_SERVICE,
+          KIDS_PRICING: data.KIDS_PRICING || DEFAULT_KIDS_PRICING,
+          STANDARD_SETUP: data.STANDARD_SETUP || DEFAULT_STANDARD_SETUP,
+          TERMS_AND_CONDITIONS: data.TERMS_AND_CONDITIONS || DEFAULT_TERMS_AND_CONDITIONS,
+          DRY_HIRE_PRICES: data.DRY_HIRE_PRICES || DEFAULT_DRY_HIRE_PRICES,
+        });
+      }
+    });
+  }, []);
+
+  const [pricingDetails, setPricingDetails] = useState({
     depositPercentage: 30,
   });
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'pricing_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPricingDetails({
+          depositPercentage: data.depositPercentage !== undefined ? data.depositPercentage : 30,
+        });
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
+      const dates = snapshot.docs.map(doc => doc.id);
+      setBlockedDates(dates);
+    });
+  }, []);
 
   const { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, TABLE_SERVICE, KIDS_PRICING, STANDARD_SETUP, TERMS_AND_CONDITIONS, DRY_HIRE_PRICES } = menus;
 
@@ -135,7 +174,44 @@ export default function HomePage() {
       return;
     }
     try {
-      // Prototype mode: store locally without database
+      const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
+      const guestCount = Number(bookingForm.guests) || 0;
+      
+      const selectedPkg = NEW_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
+      const isLiveDosa = bookingForm.selectedPackage === 'Outdoor Live Dosa Party';
+      let selectedExtra = null;
+      if (!selectedPkg && !isLiveDosa) {
+         selectedExtra = EXTRAS?.find((e: any) => e.name === bookingForm.selectedPackage);
+      }
+      
+      let baseAmount = 0;
+      if (selectedPkg) {
+        baseAmount = selectedPkg.pricePerPerson * guestCount;
+      } else if (isLiveDosa) {
+        // live dosa party base estimation
+        baseAmount = 11.00 * guestCount;
+      } else if (selectedExtra) {
+        baseAmount = selectedExtra.price;
+      }
+      
+      const deposit = pricingDetails.depositPercentage;
+      
+      await addDoc(collection(db, 'booking_requests'), {
+        name: bookingForm.name,
+        email: bookingForm.email,
+        phone: fullPhone,
+        eventType: bookingForm.eventType,
+        date: bookingForm.date,
+        timeOfDay: bookingForm.timeOfDay,
+        guests: guestCount,
+        message: bookingForm.message,
+        package: bookingForm.selectedPackage || 'Not Selected',
+        baseAmount,
+        deposit,
+        extraCharges: [],
+        createdAt: new Date().toISOString()
+      });
+
       setSubmitted(true);
       setPhoneError('');
       setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
