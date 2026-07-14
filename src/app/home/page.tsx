@@ -140,18 +140,17 @@ export default function HomePage() {
   const [customHomeAlert, setCustomHomeAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [phoneError, setPhoneError] = useState('');
 
-  // UK phone validation: 07xxxxxxxxx (11 digits) or +447xxxxxxxxx
   const validateUKPhone = (digits: string) => {
     const cleaned = digits.replace(/\s/g, '');
+    if (cleaned === '') return true;
+    if (/[^\d]/.test(cleaned)) return false;
     // Accept: 07XXXXXXXXX (10 local digits starting with 07) or 7XXXXXXXXX (9 local digits starting with 7)
-    return /^(07\d{9}|7\d{9})$/.test(cleaned) || cleaned === '';
+    return /^(07\d{9}|7\d{9})$/.test(cleaned);
   };
 
   const handlePhoneChange = (digits: string) => {
-    // Only allow digits and spaces
-    const sanitized = digits.replace(/[^\d\s]/g, '');
-    setBookingForm({ ...bookingForm, phone: sanitized });
-    if (sanitized && !validateUKPhone(sanitized)) {
+    setBookingForm({ ...bookingForm, phone: digits });
+    if (digits && !validateUKPhone(digits)) {
       setPhoneError('Enter a valid UK number (e.g. 07700 900000)');
     } else {
       setPhoneError('');
@@ -194,7 +193,7 @@ export default function HomePage() {
         baseAmount = selectedExtra.price;
       }
       
-      const deposit = pricingDetails.depositPercentage;
+      const deposit = (baseAmount * pricingDetails.depositPercentage) / 100;
       
       await addDoc(collection(db, 'booking_requests'), {
         name: bookingForm.name,
@@ -215,10 +214,10 @@ export default function HomePage() {
       setSubmitted(true);
       setPhoneError('');
       setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting request: ", error);
       setCustomHomeAlert({
-        message: "There was an error submitting your request. Please try again.",
+        message: "Error submitting: " + (error?.message || "Unknown error"),
         type: 'error'
       });
     } finally {
@@ -267,9 +266,9 @@ export default function HomePage() {
               <p className="text-sm text-gray-500 text-center mb-5">Fill in your details and we'll get back to you within 24 hours</p>
 
               {submitted ? (
-                <div className="text-center py-10 rounded-2xl border" style={{ background: 'rgba(237, 28, 36,0.04)', borderColor: 'rgba(237, 28, 36,0.2)' }}>
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(237, 28, 36,0.1)' }}>
-                    <Icon name="CheckCircleIcon" size={28} style={{ color: '#ED1C24' }} />
+                <div className="text-center py-10 rounded-2xl border" style={{ background: 'rgba(34, 197, 94, 0.04)', borderColor: 'rgba(34, 197, 94, 0.2)' }}>
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(34, 197, 94, 0.1)' }}>
+                    <Icon name="CheckCircleIcon" size={28} style={{ color: '#22c55e' }} />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">Request Received!</h3>
                   <p className="text-gray-500 text-sm">We'll contact you within 24 hours to confirm your booking.</p>

@@ -89,9 +89,9 @@ const STATUS_FLOW: BookingStatus[] = [
   'menu_selected',
   'deposit_pending',
   'deposit_confirmed',
+  'event_scheduled',
   'final_invoice_sent',
   'final_payment_received',
-  'event_scheduled',
   'event_completed',
   'completed',
 ];
@@ -576,10 +576,13 @@ export default function AdminPage() {
     let text = `Hi ${customerName}, here are our *${menuType}* options from Madras Flavours Events:\n\n`;
     if (menuType === 'Packages') {
       text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}\n${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
-    } else if (menuType === 'Menu Categories') {
+    } else if (menuType === 'Menu Categories' || menuType === 'Menu Items') {
       Object.keys(editableMenuCategories).forEach(catKey => {
          text += `*${catKey.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}:*\n${(editableMenuCategories[catKey] || []).join(', ')}\n\n`;
       });
+    } else if (menuType === 'Live Dosa Menu') {
+      text += editableLiveDosaPartyMenu.pricing.join('\n') + '\n\n';
+      text += `Includes:\n${editableLiveDosaPartyMenu.items.join(', ')}\n\n`;
     } else if (menuType === 'Dry Hire') {
       text += editableDryHirePrices.map(row => `• *${row.day} (${row.session}):* £${row.price}`).join('\n') + '\n\n';
     } else if (menuType === 'Kids Pricing') {
@@ -642,7 +645,7 @@ export default function AdminPage() {
 
     const grandTotal = getTotalAmount(booking);
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! We have confirmed your selections. Here is your detailed breakdown:\n\n*📋 Booking Summary:*\n• Package: ${booking.selectedMenu || booking.package}\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}\n• Grand Total: *£${grandTotal.toLocaleString()}* (Excl. VAT)\n• Deposit Required (30%): *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! We have confirmed your selections. Here is your detailed breakdown:\n\n*📋 Booking Summary:*\n• Package: ${booking.selectedMenu || booking.package}\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}\n• Grand Total: *£${grandTotal.toLocaleString()}* (Excl. VAT)\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
   };
 
   const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
@@ -4116,40 +4119,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="mt-2 pt-2 border-t border-purple-100">
                       <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list:</div>
                       <div className="flex gap-2 flex-wrap">
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Indian Menu', selectedBooking.guests)}
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Live Dosa Menu', selectedBooking.guests)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Indian Menu
+                          Live Dosa Menu
                         </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Sri Lankan Menu', selectedBooking.guests)}
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Menu Items', selectedBooking.guests)}
                           target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
                           style={{ background: '#25D366', color: 'white' }}>
                           <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Sri Lankan Menu
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Extras', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Extras
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Dry Hire', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Dry Hire
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Kids Pricing', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Kids Pricing
+                          Menu Items
                         </a>
                       </div>
                     </div>
@@ -4410,8 +4392,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
 
 
-              {/* Step: Extra Charges — only show after event is scheduled */}
-              {['event_scheduled', 'event_completed'].includes(selectedBooking.status) && (
+              {/* Step: Extra Charges */}
+              {['event_scheduled', 'final_invoice_sent', 'event_completed'].includes(selectedBooking.status) && (
                 <div className="border border-teal-200 rounded-xl p-4 bg-teal-50">
                   <div className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-3">Adjustments / Extra Charges</div>
                   {selectedBooking.extraCharges.some(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label)) && (
