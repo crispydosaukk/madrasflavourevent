@@ -20,6 +20,7 @@ interface ExtraCharge {
   label: string;
   amount: number;
   isPreset?: boolean;
+  unitPrice?: number;
 }
 
 interface Discount {
@@ -1391,7 +1392,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     return food;
   };
 
-  const downloadInvoicePDF = (booking: Booking) => {
+  const downloadInvoicePDF = (booking: Booking, isDepositInvoice = false) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
@@ -1417,7 +1418,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
     // Build the proof screenshots section
     let screenshotsHTML = '';
-    if (booking.paymentProofDeposit || booking.paymentProofFinal || booking.paymentProofExtra) {
+    if (booking.paymentProofDeposit || (!isDepositInvoice && (booking.paymentProofFinal || booking.paymentProofExtra))) {
       screenshotsHTML += `
         <div class="section-title">Payment Verification Screenshots</div>
         <div class="proof-container">
@@ -1430,7 +1431,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           </div>
         `;
       }
-      if (booking.paymentProofFinal) {
+      if (!isDepositInvoice && booking.paymentProofFinal) {
         screenshotsHTML += `
           <div class="proof-card">
             <div class="proof-label">Final Payment Proof</div>
@@ -1438,7 +1439,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           </div>
         `;
       }
-      if (booking.paymentProofExtra) {
+      if (!isDepositInvoice && booking.paymentProofExtra) {
         screenshotsHTML += `
           <div class="proof-card">
             <div class="proof-label">Extra Charges Payment Proof</div>
@@ -1625,7 +1626,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       <body>
         <div class="header">
           <div class="header-left">
-            <h1>INVOICE & ORDER SUMMARY</h1>
+            <h1>${isDepositInvoice ? 'DEPOSIT INVOICE' : 'INVOICE & ORDER SUMMARY'}</h1>
             <p>Booking Reference: <strong>#${booking.id}</strong></p>
             <p>Enquiry Date: ${formattedEnquiryDate}</p>
           </div>
@@ -1727,6 +1728,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ${isDepositPaid ? `-£${booking.deposit.toLocaleString()} (Paid)` : `£${booking.deposit.toLocaleString()} (Pending)`}
               </td>
             </tr>
+            ${!isDepositInvoice ? `
             <tr>
               <td style="padding-left: 10px; color: #555;">
                 • Final Payment (Main Balance):
@@ -1756,35 +1758,30 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </td>
             </tr>
             `).join('')}
+            ` : ''}
             
             <tr style="border-top: 1px solid #ddd;">
-              <td style="font-weight: bold; padding-top: 10px;">Total Paid:</td>
+              <td style="font-weight: bold; padding-top: 10px;">${isDepositInvoice ? 'Total Deposit Paid:' : 'Total Paid:'}</td>
               <td class="text-right" style="font-weight: bold; color: #2b7a4a; padding-top: 10px;">
                 £${(
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
+                  isDepositInvoice 
+                    ? (isDepositPaid ? booking.deposit : 0)
+                    : ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))
                 ).toLocaleString()}
               </td>
             </tr>
             <tr>
-              <td style="font-weight: bold; padding-bottom: 10px;">Remaining Balance Due:</td>
+              <td style="font-weight: bold; padding-bottom: 10px;">${isDepositInvoice ? 'Deposit Amount Due Now:' : 'Remaining Balance Due:'}</td>
               <td class="text-right" style="font-weight: bold; color: ${
-                (grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )) <= 0 ? '#2b7a4a' : '#c86a00'
+                isDepositInvoice
+                  ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? '#2b7a4a' : '#c86a00')
+                  : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? '#2b7a4a' : '#c86a00')
               }; padding-bottom: 10px;">
-                ${(grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - (
-                  (isDepositPaid ? booking.deposit : 0) +
-                  (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) +
-                  (isExtraPaid ? extraChargesTotal : 0)
-                )).toLocaleString()}`}
+                ${
+                  isDepositInvoice
+                    ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? 'DEPOSIT PAID ✓' : `£${(booking.deposit - (isDepositPaid ? booking.deposit : 0)).toLocaleString()}`)
+                    : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))).toLocaleString()}`)
+                }
               </td>
             </tr>
           </tbody>
@@ -2666,11 +2663,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </span>
                       <button
                         onClick={() => downloadInvoicePDF(b)}
-                        className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 rounded-lg transition-colors flex items-center gap-1 text-xs font-bold border border-amber-200 shadow-sm"
+                        className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold border border-amber-200 shadow-sm"
                         title="Download Invoice PDF"
                       >
                         <Icon name="ArrowDownTrayIcon" size={14} />
-                        PDF
+                        Final Invoice
+                      </button>
+                      <button
+                        onClick={() => downloadInvoicePDF(b, true)}
+                        className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold border border-amber-200 shadow-sm"
+                        title="Download Deposit Invoice"
+                      >
+                        <Icon name="ArrowDownTrayIcon" size={14} />
+                        Deposit Invoice
                       </button>
                       {currentUser?.role === 'Super Admin' && (
                         <button onClick={() => handleDeleteBooking(b.id, b.name)} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors" title="Delete History Record">
@@ -3875,7 +3880,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   let newExtraCharges = [...(selectedBooking.extraCharges || [])];
                                   if (checked) {
                                     if (!newExtraCharges.some(c => c.label === extra.name)) {
-                                      newExtraCharges.push({ label: extra.name, amount: extra.price, isPreset: true });
+                                      const adults = (selectedBooking.adults ?? selectedBooking.guests) || 0;
+                                      const kids4to10 = selectedBooking.kids4to10 || 0;
+                                      const payingGuests = adults + kids4to10;
+                                      const isFlatFee = extra.name.toLowerCase().includes('flat fee');
+                                      const finalAmount = isFlatFee ? extra.price : extra.price * payingGuests;
+                                      
+                                      newExtraCharges.push({ label: extra.name, amount: finalAmount, isPreset: true, unitPrice: extra.price });
                                     }
                                   } else {
                                     newExtraCharges = newExtraCharges.filter(c => c.label !== extra.name);
@@ -3939,10 +3950,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                               const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
 
-                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, baseAmount, deposit } : b));
-                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, baseAmount, deposit } : prev);
+                              const payingGuests = adults + kids4to10;
+                              const newExtraCharges = (selectedBooking.extraCharges || []).map(c => {
+                                if (c.isPreset && !c.label.toLowerCase().includes('flat fee')) {
+                                  const unit = c.unitPrice || editableExtras.find(ex => ex.name === c.label)?.price || 0;
+                                  return { ...c, amount: unit * payingGuests, unitPrice: unit };
+                                }
+                                return c;
+                              });
+
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, baseAmount, deposit, extraCharges: newExtraCharges } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, baseAmount, deposit, extraCharges: newExtraCharges } : prev);
                               
-                              const updates = { guests, adults, baseAmount, deposit };
+                              const updates = { guests, adults, baseAmount, deposit, extraCharges: newExtraCharges };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
                             }}
@@ -3972,10 +3992,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                               const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
 
-                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kids4to10, baseAmount, deposit } : b));
-                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kids4to10, baseAmount, deposit } : prev);
+                              const payingGuests = adults + kids4to10;
+                              const newExtraCharges = (selectedBooking.extraCharges || []).map(c => {
+                                if (c.isPreset && !c.label.toLowerCase().includes('flat fee')) {
+                                  const unit = c.unitPrice || editableExtras.find(ex => ex.name === c.label)?.price || 0;
+                                  return { ...c, amount: unit * payingGuests, unitPrice: unit };
+                                }
+                                return c;
+                              });
+
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges } : prev);
                               
-                              const updates = { guests, adults, kids4to10, baseAmount, deposit };
+                              const updates = { guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
                             }}
@@ -4388,6 +4417,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <Icon name="ChatBubbleLeftRightIcon" size={16} />
                     Send Deposit Receipt via WhatsApp
                   </a>
+                  <button
+                    onClick={() => downloadInvoicePDF(selectedBooking, true)}
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center text-emerald-800 bg-white border border-emerald-300 hover:bg-emerald-50 shadow-sm transition-colors mt-2"
+                  >
+                    <Icon name="ArrowDownTrayIcon" size={16} />
+                    Download Deposit Invoice
+                  </button>
                 </div>
               )}
 
@@ -4728,15 +4764,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {(() => {
                     const grandTotal = getTotalAmount(selectedBooking);
                     const extraChargesTotal = (selectedBooking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                    const nonPresetExtras = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
+                    const nonPresetTotal = nonPresetExtras.reduce((s, c) => s + c.amount, 0);
+                    const presetTotal = extraChargesTotal - nonPresetTotal;
+                    
                     const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
                     
                     const isDepositPaid = selectedBooking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(selectedBooking.status);
                     const isFinalPaid = selectedBooking.finalPaymentPaid;
-                    const isExtraPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra || selectedBooking.finalPaymentPaid;
+                    const isNonPresetPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra;
+                    
+                    const paidExtrasAmount = (isFinalPaid ? presetTotal : 0) + (isNonPresetPaid ? nonPresetTotal : 0);
+                    const isExtraPaid = (extraChargesTotal === 0) || (paidExtrasAmount === extraChargesTotal) || selectedBooking.status === 'completed';
                     
                     const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
                                       (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                                      (isExtraPaid ? extraChargesTotal : 0);
+                                      paidExtrasAmount;
                                       
                     const remainingBalance = grandTotal - totalPaid;
 
@@ -4793,7 +4836,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               <span className="text-gray-500">Extras / Adjustments</span>
                               <div className="text-right">
                                 <span className={`font-semibold ${isExtraPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                                  £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : '(pending)'}
+                                  £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : (paidExtrasAmount > 0 ? '(partially paid)' : '(pending)')}
                                 </span>
                                 {isExtraPaid && selectedBooking.paymentMethodFinal && (
                                   <span className="block text-[10px] text-gray-400 font-normal">
@@ -4886,13 +4929,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       Set Payment Due Date First ↑
                     </div>
                   ) : (
-                    <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
-                      disabled={selectedBooking.discountRequest?.status === 'pending'}
-                      className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
-                      <Icon name="DocumentTextIcon" size={16} />
-                      {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => downloadInvoicePDF(selectedBooking)}
+                        className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center text-emerald-800 bg-white border border-emerald-300 hover:bg-emerald-50 shadow-sm transition-colors"
+                      >
+                        <Icon name="ArrowDownTrayIcon" size={16} />
+                        Download Final Invoice
+                      </button>
+                      <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
+                        disabled={selectedBooking.discountRequest?.status === 'pending'}
+                        className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
+                        <Icon name="DocumentTextIcon" size={16} />
+                        {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
+                      </button>
+                    </>
                   )}
                 </div>
               )}
