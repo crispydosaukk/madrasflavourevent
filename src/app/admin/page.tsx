@@ -58,6 +58,8 @@ interface Booking {
   dueDate?: string;
   package: string;
   selectedMenu?: string;
+  selectedMenuItems?: Record<string, string[]>;
+  vatRate?: number;
   extraCharges: ExtraCharge[];
   paymentProofDeposit?: string;
   paymentProofFinal?: string;
@@ -317,6 +319,7 @@ export default function AdminPage() {
           finalPaymentPaid: data.finalPaymentPaid || false,
           package: data.package || 'Not Selected',
           selectedMenu: data.selectedMenu,
+          selectedMenuItems: data.selectedMenuItems,
           extraCharges: data.extraCharges || [],
           paymentProofDeposit: data.paymentProofDeposit,
           paymentProofFinal: data.paymentProofFinal,
@@ -427,6 +430,7 @@ export default function AdminPage() {
   const [discountReason, setDiscountReason] = useState('');
   const [discountError, setDiscountError] = useState('');
   const [showMenuPanel, setShowMenuPanel] = useState(false);
+  const [expandedCategoryKey, setExpandedCategoryKey] = useState<string | null>(null);
   const [historySearch, setHistorySearch] = useState('');
   const [customAlert, setCustomAlert] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [bookingToDelete, setBookingToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -645,24 +649,43 @@ export default function AdminPage() {
     const guestBreakdown = `• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0`;
 
     const grandTotal = getTotalAmount(booking);
+    const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! We have confirmed your selections. Here is your detailed breakdown:\n\n*📋 Booking Summary:*\n• Package: ${booking.selectedMenu || booking.package}\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}\n• Grand Total: *£${grandTotal.toLocaleString()}* (Excl. VAT)\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
+    let menuItemsText = '';
+    if (booking.selectedMenuItems && Object.keys(booking.selectedMenuItems).length > 0) {
+      const categoryLabels: Record<string, string> = {
+        staters: 'Starters', vegMains: 'Veg Mains', paneerMains: 'Paneer Mains',
+        riceAndNoodles: 'Rice / Noodles', dessert: 'Desserts', breads: 'Breads', dhal: 'Dhal'
+      };
+      for (const [key, items] of Object.entries(booking.selectedMenuItems)) {
+        if (items && items.length > 0) {
+          const label = categoryLabels[key] || key;
+          menuItemsText += `  ▫️ ${label}: ${items.join(', ')}\n`;
+        }
+      }
+    }
+
+    const packageText = `*🍽️ Menu Selection:*\n• Package: *${booking.selectedMenu || booking.package}*\n${menuItemsText}`;
+
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! Here is a summary of your confirmed selections:\n\n*📅 Event Details:*\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n${packageText}\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}${vatText}\n• Grand Total: *£${grandTotal.toLocaleString()}*\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
   };
 
   const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const grandTotal = getTotalAmount(booking);
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! 🥳 Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*💰 Payments Summary:*\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! 🥳 Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*💰 Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
   };
 
   const buildStep7FinalPaymentReceivedWhatsAppText = (booking: Booking) => {
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const grandTotal = getTotalAmount(booking);
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! 🥳 Your booking account is now settled.\n\n*💰 Payments Summary:*\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! 🥳 Your booking account is now settled.\n\n*💰 Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
   };
 
   const buildCompletedWhatsAppText = (booking: Booking) => {
@@ -1389,7 +1412,266 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const getTotalAmount = (b: Booking) => {
     const food = getFoodPackageTotal(b);
+    if (b.vatRate === 20) {
+      return food * 1.2;
+    }
     return food;
+  };
+
+  const downloadMenuSelectionPDF = (booking: Booking) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const adults = booking.adults ?? booking.guests;
+    const kids4to10 = booking.kids4to10 || 0;
+    const kidsUnder4 = booking.kidsUnder4 || 0;
+    const totalGuests = adults + kids4to10 + kidsUnder4;
+    
+    // Format dates
+    const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
+    const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
+
+    // Construct logo source
+    const logoUrl = window.location.origin + '/assets/images/logomf.png';
+
+    // Build menu items HTML
+    let invoiceMenuItemsHTML = '';
+    if (booking.selectedMenuItems && Object.keys(booking.selectedMenuItems).length > 0) {
+      invoiceMenuItemsHTML += '<div class="menu-grid">';
+      const categoryLabels: Record<string, string> = {
+        staters: 'Starters', vegMains: 'Veg Mains', paneerMains: 'Paneer Mains',
+        riceAndNoodles: 'Rice/Noodles', dessert: 'Desserts', breads: 'Breads', dhal: 'Dhal'
+      };
+      for (const [key, items] of Object.entries(booking.selectedMenuItems)) {
+        if (items && items.length > 0) {
+          const label = categoryLabels[key] || key;
+          const itemsList = items.map(item => `<li>${item}</li>`).join('');
+          invoiceMenuItemsHTML += `
+            <div class="menu-category-block">
+              <h4 class="category-title">${label}</h4>
+              <ul class="category-items">
+                ${itemsList}
+              </ul>
+            </div>
+          `;
+        }
+      }
+      invoiceMenuItemsHTML += '</div>';
+    } else {
+      invoiceMenuItemsHTML = '<div style="margin-top: 15px; font-size: 14px; color: #666;">No specific menu items selected yet.</div>';
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Menu Selection - ${booking.name}</title>
+        <style>
+          body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 40px;
+            line-height: 1.5;
+            font-size: 14px;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #ED1C24;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header-left h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+          }
+          .header-left p {
+            margin: 0;
+            color: #666;
+            font-size: 13px;
+          }
+          .logo {
+            max-height: 80px;
+            object-fit: contain;
+          }
+          .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 30px;
+          }
+          .details-card h3 {
+            margin: 0 0 10px 0;
+            color: #ED1C24;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+          }
+          .details-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+          }
+          .details-label {
+            color: #666;
+            font-weight: 500;
+          }
+          .details-value {
+            font-weight: 600;
+            color: #1a1a1a;
+          }
+          .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 5px;
+          }
+          .menu-box {
+            background-color: #fcfcfc;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+          }
+          .package-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ED1C24;
+            margin-bottom: 15px;
+            text-align: center;
+            border-bottom: 2px dashed #e0e0e0;
+            padding-bottom: 15px;
+          }
+          .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+          }
+          .menu-category-block {
+            background: #fff;
+            border: 1px solid #eee;
+            border-left: 4px solid #ED1C24;
+            padding: 12px 15px;
+            border-radius: 4px;
+          }
+          .category-title {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #ED1C24;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #f5f5f5;
+            padding-bottom: 5px;
+          }
+          .category-items {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+          }
+          .category-items li {
+            font-size: 13px;
+            color: #333;
+            margin-bottom: 6px;
+            position: relative;
+            padding-left: 14px;
+            line-height: 1.4;
+          }
+          .category-items li::before {
+            content: "•";
+            color: #ED1C24;
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+          }
+          .footer-note {
+            margin-top: 50px;
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+          }
+          @media print {
+            body { padding: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="header-left">
+            <h1>MENU SELECTION SUMMARY</h1>
+            <p>Booking Reference: <strong>#${booking.id}</strong></p>
+            <p>Enquiry Date: ${formattedEnquiryDate}</p>
+          </div>
+          <img class="logo" src="${logoUrl}" alt="Madras Flavours Events Logo" />
+        </div>
+
+        <div class="grid-2">
+          <div class="details-card">
+            <h3>Customer Details</h3>
+            <div class="details-row">
+              <span class="details-label">Name</span>
+              <span class="details-value">${booking.name || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Phone</span>
+              <span class="details-value">${booking.phone || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Email</span>
+              <span class="details-value">${booking.email || 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="details-card">
+            <h3>Event Details</h3>
+            <div class="details-row">
+              <span class="details-label">Event Type</span>
+              <span class="details-value">${booking.eventType || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Date & Time</span>
+              <span class="details-value">${formattedDate} (${booking.time || 'N/A'})</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Total Guests</span>
+              <span class="details-value">${totalGuests} Guests</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Selected Package & Menu</div>
+        <div class="menu-box">
+          <div class="package-name">${booking.selectedMenu || booking.package || 'No Package Selected'}</div>
+          ${invoiceMenuItemsHTML}
+        </div>
+
+        <div class="footer-note">
+          <p>This document is a summary of your selected menu choices and does not serve as a financial invoice.</p>
+        </div>
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const downloadInvoicePDF = (booking: Booking, isDepositInvoice = false) => {
@@ -1415,6 +1697,23 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
     // Construct logo source (ensure it points to the absolute path of the domain)
     const logoUrl = window.location.origin + '/assets/images/logomf.png';
+
+    // Build menu items HTML
+    let invoiceMenuItemsHTML = '';
+    if (booking.selectedMenuItems && Object.keys(booking.selectedMenuItems).length > 0) {
+      invoiceMenuItemsHTML += '<div style="margin-top: 10px; font-size: 13px;"><strong>Selected Menu Items:</strong><br/>';
+      const categoryLabels: Record<string, string> = {
+        staters: 'Starters', vegMains: 'Veg Mains', paneerMains: 'Paneer Mains',
+        riceAndNoodles: 'Rice/Noodles', dessert: 'Desserts', breads: 'Breads', dhal: 'Dhal'
+      };
+      for (const [key, items] of Object.entries(booking.selectedMenuItems)) {
+        if (items && items.length > 0) {
+          const label = categoryLabels[key] || key;
+          invoiceMenuItemsHTML += `&bull; ${label}: ${items.join(', ')}<br/>`;
+        }
+      }
+      invoiceMenuItemsHTML += '</div>';
+    }
 
     // Build the proof screenshots section
     let screenshotsHTML = '';
@@ -1684,6 +1983,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   • Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person<br/>
                   • Kids (0-4 yrs): ${kidsUnder4} × Free
                 </div>
+                ${invoiceMenuItemsHTML}
               </td>
               <td class="text-right" style="vertical-align: middle;">£${booking.baseAmount.toLocaleString()}</td>
             </tr>
@@ -1702,6 +2002,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <tr>
               <td style="color: #d9534f;">Discount (${booking.discount.reason}):</td>
               <td class="text-right" style="color: #d9534f;">-£${discountAmount.toLocaleString()}</td>
+            </tr>
+            ` : ''}
+            ${booking.vatRate === 20 ? `
+            <tr>
+              <td>VAT (20%):</td>
+              <td class="text-right">£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}</td>
             </tr>
             ` : ''}
             <tr class="grand-total">
@@ -3731,29 +4037,63 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
               {/* Step 1: Send Packages & Extras via WhatsApp */}
               {selectedBooking.status === 'new_enquiry' && (
-                <div className="border border-red-200 rounded-xl p-4 bg-red-50/50 space-y-3">
-                  <div className="text-xs font-semibold text-red-800 uppercase tracking-wide flex items-center gap-1.5">
-                    <Icon name="InboxIcon" size={14} style={{ color: '#ED1C24' }} />
-                    Step 1: Send Packages & Extras List to Customer
+                <div className="border border-purple-200 rounded-xl p-4 bg-purple-50 space-y-3 mb-4">
+                  <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide flex items-center gap-1.5 mb-3">
+                    <Icon name="InboxIcon" size={14} style={{ color: '#7E22CE' }} />
+                    Step 1: Send Menu Packages via WhatsApp
                   </div>
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    Send the customer our complete list of Outdoor Catering packages, live counter pricing, and extras to start the discussion.
-                  </p>
-                  <a
-                    href={buildStep1EnquiryWhatsAppText(selectedBooking)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
-                    style={{ background: '#25D366', color: 'white' }}
-                  >
-                    <Icon name="ChatBubbleLeftRightIcon" size={16} />
-                    Send Packages & Extras via WhatsApp
-                  </a>
+                  <div className="space-y-2">
+                    {editableNewPackages.map((pkg) => {
+                      const adults = selectedBooking.adults ?? selectedBooking.guests;
+                      const kids4to10 = selectedBooking.kids4to10 || 0;
+                      const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
+                      const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
+                      const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
+                      const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
+                      const totalGuests = adults + kids4to10 + kidsUnder4;
+                      
+                      return (
+                        <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
+                            <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
+                          </div>
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n✨ *Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n👥 ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n🎁 ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
+                            style={{ background: '#25D366', color: 'white' }}>
+                            <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                            Send
+                          </a>
+                        </div>
+                      );
+                    })}
+                    {/* Also offer Indian & Sri Lankan menus */}
+                    <div className="mt-2 pt-2 border-t border-purple-100">
+                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list:</div>
+                      <div className="flex gap-2 flex-wrap">
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Live Dosa Menu', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Live Dosa Menu
+                        </a>
+                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Menu Items', selectedBooking.guests)}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
+                          style={{ background: '#25D366', color: 'white' }}>
+                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
+                          Menu Items
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Select Package Block */}
-              {(selectedBooking.status === 'menu_sent' || selectedBooking.status === 'menu_selected') && (
+              {selectedBooking.status === 'menu_sent' && (
                 <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/50">
                   <div className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-3 flex items-center gap-1.5">
                     <Icon name="ClipboardDocumentListIcon" size={14} style={{ color: '#ED1C24' }} />
@@ -3864,9 +4204,113 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </select>
                     </div>
 
+                    {/* Select Menu Items UI */}
+                    {(() => {
+                      const selectedPkgName = selectedBooking.selectedMenu || selectedBooking.package || '';
+                      const selectedPackageObj = editableNewPackages.find(p => p.name === selectedPkgName);
+                      
+                      if (!selectedPackageObj || !selectedPackageObj.items) return null;
+
+                      return (
+                        <div className="mt-4 pt-4 border-t border-amber-200/50">
+                          <label className="block text-xs font-semibold text-gray-800 mb-3 uppercase tracking-wider">Select Menu Items for {selectedPackageObj.name}</label>
+                          <div className="space-y-3">
+                            {selectedPackageObj.items.map((itemStr: string) => {
+                              const match = itemStr.match(/^(\d+)\s+(.+)$/i);
+                              if (!match) return null;
+                              
+                              const limit = parseInt(match[1], 10);
+                              const catName = match[2].trim().toLowerCase();
+                              
+                              let catKey = '';
+                              if (catName.includes('stater')) catKey = 'staters';
+                              else if (catName.includes('veg main')) catKey = 'vegMains';
+                              else if (catName.includes('paneer')) catKey = 'paneerMains';
+                              else if (catName.includes('rice') || catName.includes('noodle')) catKey = 'riceAndNoodles';
+                              else if (catName.includes('dessert')) catKey = 'dessert';
+                              else if (catName.includes('bread')) catKey = 'breads';
+                              else if (catName.includes('dhal')) catKey = 'dhal';
+                              
+                              if (!catKey || !editableMenuCategories[catKey]) return null;
+                              
+                              const catOptions = editableMenuCategories[catKey];
+                              const currentSelections = (selectedBooking.selectedMenuItems || {})[catKey] || [];
+                              const isAtLimit = currentSelections.length >= limit;
+                              
+                              const isExpanded = expandedCategoryKey === catKey;
+                              
+                              return (
+                                <div key={catKey} className="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-sm">
+                                  <div 
+                                    className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
+                                    onClick={() => setExpandedCategoryKey(isExpanded ? null : catKey)}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">{match[2].trim()}</span>
+                                      <Icon name={isExpanded ? "ChevronUpIcon" : "ChevronDownIcon"} size={14} className="text-gray-400" />
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${currentSelections.length > limit ? 'bg-red-100 text-red-700' : currentSelections.length === limit ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                      {currentSelections.length} / {limit} Selected
+                                    </span>
+                                  </div>
+                                  {isExpanded && (
+                                    <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+                                      {catOptions.map((opt: string) => {
+                                        const isSelected = currentSelections.includes(opt);
+                                        return (
+                                          <label key={opt} className={`flex items-start gap-2 text-[11px] font-medium p-1.5 rounded cursor-pointer transition-colors ${isSelected ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'text-gray-600 hover:bg-gray-50 border border-transparent'}`}>
+                                            <input
+                                              type="checkbox"
+                                              checked={isSelected}
+                                              disabled={!isSelected && isAtLimit}
+                                              onChange={async (e) => {
+                                                const checked = e.target.checked;
+                                                let newSelections = [...currentSelections];
+                                                if (checked) {
+                                                  if (newSelections.length < limit) {
+                                                    newSelections.push(opt);
+                                                  } else {
+                                                    return;
+                                                  }
+                                                } else {
+                                                  newSelections = newSelections.filter(v => v !== opt);
+                                                }
+                                                
+                                                const updatedMenuData = {
+                                                  ...(selectedBooking.selectedMenuItems || {}),
+                                                  [catKey]: newSelections
+                                                };
+                                                
+                                                setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, selectedMenuItems: updatedMenuData } : b));
+                                                setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, selectedMenuItems: updatedMenuData } : prev);
+                                                
+                                                try {
+                                                  await setDoc(doc(db, 'booking_requests', selectedBooking.id), { selectedMenuItems: updatedMenuData }, { merge: true });
+                                                  await setDoc(doc(db, 'bookings', selectedBooking.id), { selectedMenuItems: updatedMenuData, updatedAt: new Date().toISOString() }, { merge: true });
+                                                } catch (err) {
+                                                  console.error('Error saving menu items:', err);
+                                                }
+                                              }}
+                                              className="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500 disabled:opacity-50"
+                                            />
+                                            <span className="leading-tight flex-1">{opt}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Select Extras Checkbox List */}
-                    <div className="mt-3 border-t border-amber-200/50 pt-3">
-                      <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
+                    {((selectedBooking.selectedMenu || selectedBooking.package || '').toLowerCase().includes('dosa')) && (
+                      <div className="mt-3 border-t border-amber-200/50 pt-3">
+                        <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
                       <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
                         {EXTRAS.map((extra) => {
                           const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
@@ -3923,6 +4367,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         })}
                       </div>
                     </div>
+                    )}
 
                     {/* Guest Breakdown for Pricing Calculation */}
                     {(selectedBooking.selectedMenu || selectedBooking.package) && (
@@ -4049,7 +4494,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     {/* Show Custom Inputs if Custom or any package is selected */}
                     {(selectedBooking.selectedMenu || selectedBooking.package) && (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-3 gap-3 pt-1">
                         <div>
                           <label className="block text-xs font-semibold text-gray-500 mb-1">Base Price (£)</label>
                           <input
@@ -4108,65 +4553,34 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">VAT Rate</label>
+                          <select
+                            value={selectedBooking.vatRate || 0}
+                            onChange={async (e) => {
+                              const vatRate = Number(e.target.value) || 0;
+                              setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, vatRate } : b));
+                              setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, vatRate } : prev);
+                              try {
+                                await setDoc(doc(db, 'booking_requests', selectedBooking.id), { vatRate }, { merge: true });
+                                await setDoc(doc(db, 'bookings', selectedBooking.id), { vatRate, updatedAt: new Date().toISOString() }, { merge: true });
+                              } catch (err) {
+                                console.error('Error saving VAT rate:', err);
+                              }
+                            }}
+                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
+                          >
+                            <option value={0}>0%</option>
+                            <option value={20}>20%</option>
+                          </select>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Step: Menu Sent — show real menu packages */}
-              {(selectedBooking.status === 'menu_sent' || showMenuPanel) && selectedBooking.status !== 'menu_selected' && selectedBooking.status !== 'deposit_pending' && selectedBooking.status !== 'deposit_confirmed' && selectedBooking.status !== 'event_scheduled' && selectedBooking.status !== 'event_completed' && selectedBooking.status !== 'final_invoice_sent' && selectedBooking.status !== 'final_payment_received' && selectedBooking.status !== 'completed' && (
-                <div className="border border-purple-200 rounded-xl p-4 bg-purple-50">
-                  <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-3">Send Menu Packages via WhatsApp</div>
-                  <div className="space-y-2">
-                    {editableNewPackages.map((pkg) => {
-                      const adults = selectedBooking.adults ?? selectedBooking.guests;
-                      const kids4to10 = selectedBooking.kids4to10 || 0;
-                      const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
-                      const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
-                      const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
-                      const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
-                      const totalGuests = adults + kids4to10 + kidsUnder4;
-                      
-                      return (
-                        <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
-                            <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
-                          </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n✨ *Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n👥 ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n🎁 ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
-                            target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
-                            style={{ background: '#25D366', color: 'white' }}>
-                            <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                            Send
-                          </a>
-                        </div>
-                      );
-                    })}
-                    {/* Also offer Indian & Sri Lankan menus */}
-                    <div className="mt-2 pt-2 border-t border-purple-100">
-                      <div className="text-xs text-purple-600 font-medium mb-2">Or send full menu list:</div>
-                      <div className="flex gap-2 flex-wrap">
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Live Dosa Menu', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Live Dosa Menu
-                        </a>
-                        <a href={buildMenuWhatsAppText(selectedBooking.name.split(' ')[0], selectedBooking.phone, 'Menu Items', selectedBooking.guests)}
-                          target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg"
-                          style={{ background: '#25D366', color: 'white' }}>
-                          <Icon name="ChatBubbleLeftRightIcon" size={12} />
-                          Menu Items
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Step 3: Send Selection Confirmation via WhatsApp */}
               {selectedBooking.status === 'menu_selected' && (
@@ -4760,6 +5174,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <span className="text-gray-600">Food Package Total</span>
                     <span className="font-semibold text-gray-900">£{getFoodPackageTotal(selectedBooking).toLocaleString()}</span>
                   </div>
+                  {selectedBooking.vatRate === 20 && (
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-600">VAT (20%)</span>
+                      <span className="font-semibold text-gray-900 text-amber-700">+£{(getFoodPackageTotal(selectedBooking) * 0.2).toLocaleString()}</span>
+                    </div>
+                  )}
 
                   {(() => {
                     const grandTotal = getTotalAmount(selectedBooking);
@@ -4904,22 +5324,31 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 </button>
               )}
               {selectedBooking.status === 'deposit_pending' && (
-                <button
-                  onClick={() => {
-                    if (!depositPaymentMethod) return;
-                    confirmDepositPaid(selectedBooking.id, depositPaymentMethod);
-                  }}
-                  disabled={!selectedBooking.paymentProofDeposit || !depositPaymentMethod}
-                  title={!selectedBooking.paymentProofDeposit ? "Please upload the payment screenshot first" : !depositPaymentMethod ? "Please select a payment method" : ""}
-                  className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
-                >
-                  <Icon name={(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofDeposit 
-                    ? 'Upload Screenshot to Proceed' 
-                    : !depositPaymentMethod 
-                      ? 'Select Payment Method to Proceed' 
-                      : 'Confirm Deposit Received'}
-                </button>
+                <div className="space-y-2 w-full">
+                  <button
+                    onClick={() => downloadMenuSelectionPDF(selectedBooking)}
+                    className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 shadow-sm transition-colors mb-2"
+                  >
+                    <Icon name="DocumentTextIcon" size={16} />
+                    Download Menu Selection PDF
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!depositPaymentMethod) return;
+                      confirmDepositPaid(selectedBooking.id, depositPaymentMethod);
+                    }}
+                    disabled={!selectedBooking.paymentProofDeposit || !depositPaymentMethod}
+                    title={!selectedBooking.paymentProofDeposit ? "Please upload the payment screenshot first" : !depositPaymentMethod ? "Please select a payment method" : ""}
+                    className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
+                  >
+                    <Icon name={(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
+                    {!selectedBooking.paymentProofDeposit 
+                      ? 'Upload Screenshot to Proceed' 
+                      : !depositPaymentMethod 
+                        ? 'Select Payment Method to Proceed' 
+                        : 'Confirm Deposit Received'}
+                  </button>
+                </div>
               )}
               {selectedBooking.status === 'deposit_confirmed' && (
                 <div className="space-y-2">
