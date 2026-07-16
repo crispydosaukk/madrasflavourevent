@@ -5,6 +5,7 @@ import Icon from '@/components/ui/AppIcon';
 import { NEW_PACKAGES, MENU_CATEGORIES, LIVE_DOSA_PARTY_MENU, EXTRAS, TABLE_SERVICE, KIDS_PRICING, DRY_HIRE_PRICES } from '@/app/data/menuData';
 import AccessControl from '@/components/admin/AccessControl';
 import MenusTabUI from '@/components/admin/MenusTabUI';
+import ManualBookingForm from '@/components/admin/ManualBookingForm';
 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db, storage } from '@/lib/firebase';
@@ -84,7 +85,7 @@ interface Customer {
   status: 'active' | 'inactive';
 }
 
-export const generateDisplayId = (booking: Booking): string => {
+const generateDisplayId = (booking: Booking): string => {
   const namePart = (booking.name || 'C').substring(0, 1).toUpperCase();
   let datePart = '0000';
   if (booking.date && booking.date !== 'N/A') {
@@ -268,7 +269,7 @@ function buildWhatsAppLink(phone: string, message: string) {
   return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
 }
 
-type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker';
+type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker' | 'manual_booking';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -2229,6 +2230,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
     { id: 'access', label: 'Access Control', icon: 'ShieldCheckIcon', requiredPerm: 'manage_access' },
     { id: 'tracker', label: 'Booking Tracker', icon: 'MapIcon', requiredPerm: 'manage_tracker' },
+    { id: 'manual_booking', label: 'Direct Booking', icon: 'PlusCircleIcon', requiredPerm: 'manage_manual_booking' },
   ];
 
   const visibleNavItems = navItems.filter(item => {
@@ -2394,6 +2396,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         </div>
 
         <div className="p-4 md:p-6">
+
+          {/* ─── MANUAL BOOKING ─── */}
+          {activeTab === 'manual_booking' && (
+            <div className="space-y-6">
+              <ManualBookingForm 
+                setCustomAlert={setCustomAlert} 
+                packages={editableNewPackages} 
+                onBookingCreated={(newBooking) => setSelectedBooking(newBooking)}
+                depositPercentage={pricingDetails.depositPercentage}
+              />
+            </div>
+          )}
 
           {/* ─── OVERVIEW ─── */}
           {activeTab === 'overview' && (
@@ -5610,6 +5624,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           </div>
         </div>
       )}
+
+
 
       {/* ─── CUSTOMER DETAIL DRAWER ─── */}
       {selectedCustomer && (

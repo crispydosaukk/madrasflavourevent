@@ -67,7 +67,8 @@ export default function AccessControl({ currentUserRole }: { currentUserRole?: s
           'manage_settings',
           'manage_access',
           'manage_tracker',
-          'manage_discounts'
+          'manage_discounts',
+          'manage_manual_booking'
         ];
         
         for (const p of DEFAULT_PERMISSIONS) {
