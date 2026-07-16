@@ -67,6 +67,7 @@ interface Booking {
   paymentProofExtra?: string;
   paymentMethodDeposit?: string;
   paymentMethodFinal?: string;
+  paymentMethodExtra?: string;
   discount?: Discount;
   discountRequest?: DiscountRequest;
   enquiryDate: string;
@@ -288,16 +289,19 @@ export default function AdminPage() {
   const [trackerSearch, setTrackerSearch] = useState<string>('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<string>('');
   const [finalPaymentMethod, setFinalPaymentMethod] = useState<string>('');
+  const [extraPaymentMethod, setExtraPaymentMethod] = useState<string>('');
 
   useEffect(() => {
     if (selectedBooking) {
       setDepositPaymentMethod(selectedBooking.paymentMethodDeposit || '');
       setFinalPaymentMethod(selectedBooking.paymentMethodFinal || '');
+      setExtraPaymentMethod(selectedBooking.paymentMethodExtra || '');
     } else {
       setDepositPaymentMethod('');
       setFinalPaymentMethod('');
+      setExtraPaymentMethod('');
     }
-  }, [selectedBooking?.id, selectedBooking?.paymentMethodDeposit, selectedBooking?.paymentMethodFinal]);
+  }, [selectedBooking?.id, selectedBooking?.paymentMethodDeposit, selectedBooking?.paymentMethodFinal, selectedBooking?.paymentMethodExtra]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -344,6 +348,7 @@ export default function AdminPage() {
           paymentProofExtra: data.paymentProofExtra,
           paymentMethodDeposit: data.paymentMethodDeposit,
           paymentMethodFinal: data.paymentMethodFinal,
+          paymentMethodExtra: data.paymentMethodExtra,
           discount: data.discount,
           discountRequest: data.discountRequest,
           enquiryDate: data.createdAt ? new Date(data.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -628,20 +633,20 @@ export default function AdminPage() {
     text += `Here are our packages & pricing details:\n\n`;
     
     // 1. Packages
-    text += `🎁 *Catering Packages:*\n`;
+    text += `*Catering Packages:*\n`;
     text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}/person\n  ${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
     
     // 2. Live Dosa Counter
-    text += `🎪 *Outdoor Live Dosa Counter:*\n`;
+    text += `*Outdoor Live Dosa Counter:*\n`;
     text += editableLiveDosaPartyMenu.pricing.join('\n') + '\n';
     text += `Includes:\n${editableLiveDosaPartyMenu.items.join(', ')}\n\n`;
     
     // 3. Extras
-    text += `✨ *Extras Available:*\n`;
+    text += `*Extras Available:*\n`;
     text += editableExtras.map((e: any) => `• ${e.name}: £${e.price.toFixed(2)}`).join('\n') + '\n\n';
     
     // 4. Kids Pricing
-    text += `🧒 *Kids Pricing* (Over 50 Adults):\n`;
+    text += `*Kids Pricing* (Over 50 Adults):\n`;
     text += editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n') + '\n\n';
     
     text += `Please let us know your preferred options, estimated guest count, and any customizations you would like! 🙏`;
@@ -658,7 +663,7 @@ export default function AdminPage() {
     let extrasText = '';
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     if (extraChargesTotal > 0) {
-      extrasText = '\n*➕ Selected Extras & Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
+      extrasText = '\n*Selected Extras & Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
     }
 
     const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
@@ -683,9 +688,9 @@ export default function AdminPage() {
       }
     }
 
-    const packageText = `*🍽️ Menu Selection:*\n• Package: *${booking.selectedMenu || booking.package}*\n${menuItemsText}`;
+    const packageText = `*Menu Selection:*\n• Package: *${booking.selectedMenu || booking.package}*\n${menuItemsText}`;
 
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! Here is a summary of your confirmed selections:\n\n*📅 Event Details:*\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n${packageText}\n*👥 Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*💰 Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}${vatText}\n• Grand Total: *£${grandTotal.toLocaleString()}*\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! Here is a summary of your confirmed selections:\n\n*Event Details:*\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n${packageText}\n*Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}${vatText}\n• Grand Total: *£${grandTotal.toLocaleString()}*\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
   };
 
   const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
@@ -694,7 +699,7 @@ export default function AdminPage() {
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! 🥳 Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*💰 Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
   };
 
   const buildStep7FinalPaymentReceivedWhatsAppText = (booking: Booking) => {
@@ -703,7 +708,7 @@ export default function AdminPage() {
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
     
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! 🥳 Your booking account is now settled.\n\n*💰 Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! Your booking account is now settled.\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
   };
 
   const buildCompletedWhatsAppText = (booking: Booking) => {
@@ -720,7 +725,7 @@ export default function AdminPage() {
 
     let extrasText = '';
     if (extraChargesTotal > 0) {
-      extrasText = '\n\n*➕ Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
+      extrasText = '\n\n*Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: +£${c.amount.toLocaleString()}`).join('\n');
     }
 
     const adults = booking.adults ?? booking.guests;
@@ -733,26 +738,25 @@ export default function AdminPage() {
 
     return `Hi ${booking.name.split(' ')[0]},
 
-Thank you so much for booking with Madras Flavours Events! 🎊 Your event was a success and your booking is now fully completed.
+Thank you so much for booking with Madras Flavours Events! Your event was a success and your booking is now fully completed.
 
-*📝 Event Summary:*
+*Event Summary:*
 • Event: ${booking.eventType}
 • Date: ${booking.date}
 • Package: ${booking.selectedMenu || booking.package}
 
-*👥 Guest Breakdown:*
+*Guest Breakdown:*
 ${guestBreakdown}
 • Total Guests: ${adults + kids4to10 + kidsUnder4}${extrasText}
 
-*💰 Final Invoice Details:*
+*Final Invoice Details:*
 • Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}
 • Grand Total: £${total}
 
-*💳 Payments Received:*
+*Payments Received:*
 • Deposit: £${deposit}
 • Main Balance Paid: £${finalPaymentPaidAmt.toLocaleString()}
-${extraChargesTotal > 0 ? `• Extra Charges Paid: £${extraChargesTotal.toLocaleString()}\n` : ''}
-• Status: *Paid in Full ✅*
+${extraChargesTotal > 0 ? `• Extra Charges Paid: £${extraChargesTotal.toLocaleString()} (${booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid'})\n` : ''}• Status: *Paid in Full ✅*
 
 It was an absolute pleasure serving you. We hope you and your guests had a wonderful time! We'd love to host your future events. 🙏✨`;
   };
@@ -760,16 +764,16 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
   const buildFinalInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
     let extrasText = '';
     if (booking.extraCharges && booking.extraCharges.length > 0) {
-      extrasText = '\n\n*➕ Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
+      extrasText = '\n\n*Additional Adjustments:*\n' + booking.extraCharges.map(c => `• ${c.label}: £${c.amount.toLocaleString()}`).join('\n');
     }
 
     let discountText = '';
     if (booking.discount) {
-      discountText = `\n\n*🏷️ Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
+      discountText = `\n\n*Discount (${booking.discount.reason}):* -£${getDiscountAmount(booking).toLocaleString()}`;
     }
 
 
-    const dueDateText = booking.dueDate ? `\n\n*⏰ Payment Due By:* ${booking.dueDate}` : '';
+    const dueDateText = booking.dueDate ? `\n\n*Payment Due By:* ${booking.dueDate}` : '';
 
     const adults = booking.adults ?? booking.guests;
     const kids4to10 = booking.kids4to10 || 0;
@@ -778,7 +782,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
     const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
 
-    const guestBreakdown = `*👥 Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
+    const guestBreakdown = `*Guest Breakdown:*\n• Adults: ${adults} × £${pricePerPerson}/person = £${(adults * pricePerPerson).toLocaleString()}\n• Kids (4-10 yrs): ${kids4to10} × £${kidsPrice}/person = £${(kids4to10 * kidsPrice).toLocaleString()}\n• Kids (0-4 yrs): ${kidsUnder4} × Free = £0\n• Total Guests: ${adults + kids4to10 + kidsUnder4}`;
 
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
@@ -794,14 +798,14 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
                       
     const remainingBalance = grandTotal - totalPaid;
     
-    const breakdownText = `*💳 Payment Breakdown:*\n` +
+    const breakdownText = `*Payment Breakdown:*\n` +
       `• Deposit Paid: £${booking.deposit.toLocaleString()} (${isDepositPaid ? (booking.paymentMethodDeposit ? `Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
       `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
-      (extraChargesTotal > 0 ? `• Extras / Adjustments: £${extraChargesTotal.toLocaleString()} (${isExtraPaid ? 'Paid' : 'Pending'})\n` : '') +
+      (extraChargesTotal > 0 ? `• Extras / Adjustments: £${extraChargesTotal.toLocaleString()} (${isExtraPaid ? (booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` : '') +
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${generateDisplayId(booking)}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${generateDisplayId(booking)}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*Booking Ref:* ${generateDisplayId(booking)}\n*Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\nAccount Name: ${bank.accountName}\nSort Code: ${bank.sortCode}\nAccount No: ${bank.accountNumber}\nReference: ${generateDisplayId(booking)}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -816,13 +820,13 @@ Thank you for celebrating with us at Madras Flavours Events! 🎉 We hope you ha
 There were some additional adjustments/services added during your event:
 ${extrasList}
 
-*💰 Extra Balance Due: £${extraChargesTotal.toLocaleString()}*
+*Extra Balance Due: £${extraChargesTotal.toLocaleString()}*
 
 Please transfer this outstanding balance to:
-🏦 Account Name: ${bank.accountName}
-📋 Sort Code: ${bank.sortCode}
-🔢 Account No: ${bank.accountNumber}
-📌 Reference: ${generateDisplayId(booking)} (Extras)
+Account Name: ${bank.accountName}
+Sort Code: ${bank.sortCode}
+Account No: ${bank.accountNumber}
+Reference: ${generateDisplayId(booking)} (Extras)
 
 Once paid, please send a screenshot of the transfer confirmation here so we can finalize and close your booking. Thank you! 🙏`;
   };
@@ -2071,9 +2075,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <tr>
               <td style="padding-left: 10px; color: #555; vertical-align: top;">
                 • ${extra.label}:
-                ${isExtraPaid && booking.paymentMethodFinal ? `
+                ${isExtraPaid && booking.paymentMethodExtra ? `
                   <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
-                    Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}
+                    Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}
                   </div>
                 ` : ''}
               </td>
@@ -4100,7 +4104,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n✨ *Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n👥 ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n🎁 ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n🧒 *Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n🎪 *Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n*Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n*Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n*Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
@@ -4658,7 +4662,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <p>Account No: {bankDetails.accountNumber}</p>
                     <p className="mt-1 font-semibold text-amber-700">Deposit Amount: £{selectedBooking.deposit.toLocaleString()}</p>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\n🏦 Account Name: ${bankDetails.accountName}\n📋 Sort Code: ${bankDetails.sortCode}\n🔢 Account No: ${bankDetails.accountNumber}\n📌 Reference: ${generateDisplayId(selectedBooking)}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\nAccount Name: ${bankDetails.accountName}\nSort Code: ${bankDetails.sortCode}\nAccount No: ${bankDetails.accountNumber}\nReference: ${generateDisplayId(selectedBooking)}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
                     style={{ background: '#25D366', color: 'white' }}>
@@ -5577,16 +5581,42 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         )}
                       </div>
                     )}
+                    
+                    {isExtraPaymentNeeded && selectedBooking.paymentProofExtra && (
+                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mt-3">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Extra Payment Method</label>
+                        <select
+                          value={extraPaymentMethod}
+                          onChange={(e) => setExtraPaymentMethod(e.target.value)}
+                          className="w-full border border-gray-300 rounded-lg shadow-sm focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm p-2.5 outline-none"
+                        >
+                          <option value="">-- Select Payment Method --</option>
+                          <option value="Paid by Cash">Cash</option>
+                          <option value="Paid by Bank Transfer">Bank Transfer</option>
+                          <option value="Paid by Card">Card (Stripe)</option>
+                          <option value="Paid by Payment Link">Payment Link</option>
+                        </select>
+                      </div>
+                    )}
 
                     <button 
-                      onClick={() => updateStatus(selectedBooking.id, 'completed')}
-                      disabled={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra}
-                      title={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? "Please upload the extra payment screenshot first" : ""}
-                      className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? 'bg-gray-400 cursor-not-allowed border-none' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
-                      {isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? (
+                      onClick={async () => {
+                        if (isExtraPaymentNeeded && extraPaymentMethod) {
+                           try {
+                             await setDoc(doc(db, 'booking_requests', selectedBooking.id), { paymentMethodExtra: extraPaymentMethod }, { merge: true });
+                             setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, paymentMethodExtra: extraPaymentMethod } : b));
+                             setSelectedBooking(prev => prev ? { ...prev, paymentMethodExtra: extraPaymentMethod } : prev);
+                           } catch (e) {}
+                        }
+                        updateStatus(selectedBooking.id, 'completed')
+                      }}
+                      disabled={isExtraPaymentNeeded && (!selectedBooking.paymentProofExtra || !extraPaymentMethod)}
+                      title={isExtraPaymentNeeded && !selectedBooking.paymentProofExtra ? "Please upload the extra payment screenshot first" : isExtraPaymentNeeded && !extraPaymentMethod ? "Please select a payment method" : ""}
+                      className={`w-full mt-3 text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isExtraPaymentNeeded && (!selectedBooking.paymentProofExtra || !extraPaymentMethod) ? 'bg-gray-400 cursor-not-allowed border-none' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
+                      {isExtraPaymentNeeded && (!selectedBooking.paymentProofExtra || !extraPaymentMethod) ? (
                         <>
                           <Icon name="LockClosedIcon" size={16} />
-                          Upload Payment to Close Event
+                          {(!selectedBooking.paymentProofExtra) ? "Upload Payment to Close Event" : "Select Payment Method to Close"}
                         </>
                       ) : (
                         <>
