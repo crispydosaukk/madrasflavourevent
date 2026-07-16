@@ -84,6 +84,23 @@ interface Customer {
   status: 'active' | 'inactive';
 }
 
+export const generateDisplayId = (booking: Booking): string => {
+  const namePart = (booking.name || 'C').substring(0, 1).toUpperCase();
+  let datePart = '0000';
+  if (booking.date && booking.date !== 'N/A') {
+    const d = new Date(booking.date);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      datePart = `${day}${month}`;
+    }
+  }
+  const phoneStr = booking.phone || '000';
+  const phonePart = phoneStr.replace(/\D/g, '').slice(-3).padStart(3, '0');
+  return `${namePart}${datePart}${phonePart}`;
+};
+
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const STATUS_FLOW: BookingStatus[] = [
@@ -783,7 +800,7 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${booking.id}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${booking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*📋 Booking Ref:* ${generateDisplayId(booking)}\n*📦 Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*💰 Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\n🏦 Account Name: ${bank.accountName}\n📋 Sort Code: ${bank.sortCode}\n🔢 Account No: ${bank.accountNumber}\n📌 Reference: ${generateDisplayId(booking)}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -804,7 +821,7 @@ Please transfer this outstanding balance to:
 🏦 Account Name: ${bank.accountName}
 📋 Sort Code: ${bank.sortCode}
 🔢 Account No: ${bank.accountNumber}
-📌 Reference: ${booking.id} (Extras)
+📌 Reference: ${generateDisplayId(booking)} (Extras)
 
 Once paid, please send a screenshot of the transfer confirmation here so we can finalize and close your booking. Thank you! 🙏`;
   };
@@ -1610,7 +1627,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <div class="header">
           <div class="header-left">
             <h1>MENU SELECTION SUMMARY</h1>
-            <p>Booking Reference: <strong>#${booking.id}</strong></p>
+            <p>Booking Reference: <strong>#${generateDisplayId(booking)}</strong></p>
             <p>Enquiry Date: ${formattedEnquiryDate}</p>
           </div>
           <img class="logo" src="${logoUrl}" alt="Madras Flavours Events Logo" />
@@ -1926,7 +1943,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         <div class="header">
           <div class="header-left">
             <h1>${isDepositInvoice ? 'DEPOSIT INVOICE' : 'INVOICE & ORDER SUMMARY'}</h1>
-            <p>Booking Reference: <strong>#${booking.id}</strong></p>
+            <p>Booking Reference: <strong>#${generateDisplayId(booking)}</strong></p>
             <p>Enquiry Date: ${formattedEnquiryDate}</p>
           </div>
           <img class="logo" src="${logoUrl}" alt="Madras Flavours Events Logo" />
@@ -2116,7 +2133,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const enquiries = bookings.filter(b => b.status === 'new_enquiry');
   const activeBookings = bookings.filter(b => b.status !== 'new_enquiry' && b.status !== 'completed');
-  const completedBookings = bookings.filter(b => b.status === 'completed').sort((a, b) => {
+  const HISTORY_STATUSES = ['deposit_confirmed', 'event_scheduled', 'final_invoice_sent', 'final_payment_received', 'event_completed', 'completed'];
+  const completedBookings = bookings.filter(b => HISTORY_STATUSES.includes(b.status)).sort((a, b) => {
     const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.date).getTime());
     const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.date).getTime());
     return bTime - aTime;
@@ -2869,7 +2887,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <tr key={b.id} className="hover:bg-gray-50/80 transition-colors">
                             <td className="px-4 py-3.5">
                               <div className="font-medium text-gray-900 text-sm">{b.name}</div>
-                              <div className="text-xs text-gray-400">{b.id}</div>
+                              <div className="text-xs text-gray-400">{generateDisplayId(b)}</div>
                             </td>
                             <td className="px-4 py-3.5">
                               <div className="text-sm text-gray-700">{b.eventType}</div>
@@ -2968,12 +2986,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         {STATUS_LABELS[b.status]}
                       </span>
                       <button
-                        onClick={() => downloadInvoicePDF(b)}
-                        className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold border border-amber-200 shadow-sm"
-                        title="Download Invoice PDF"
+                        onClick={() => downloadMenuSelectionPDF(b)}
+                        className="text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold border border-indigo-200 shadow-sm"
+                        title="Download Menu PDF"
                       >
-                        <Icon name="ArrowDownTrayIcon" size={14} />
-                        Final Invoice
+                        <Icon name="DocumentTextIcon" size={14} />
+                        Menu PDF
                       </button>
                       <button
                         onClick={() => downloadInvoicePDF(b, true)}
@@ -2983,6 +3001,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <Icon name="ArrowDownTrayIcon" size={14} />
                         Deposit Invoice
                       </button>
+                      {b.status === 'completed' && (
+                        <button
+                          onClick={() => downloadInvoicePDF(b)}
+                          className="text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 p-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold border border-amber-200 shadow-sm"
+                          title="Download Invoice PDF"
+                        >
+                          <Icon name="ArrowDownTrayIcon" size={14} />
+                          Final Invoice
+                        </button>
+                      )}
                       {currentUser?.role === 'Super Admin' && (
                         <button onClick={() => handleDeleteBooking(b.id, b.name)} className="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-1.5 rounded-lg transition-colors" title="Delete History Record">
                           <Icon name="TrashIcon" size={14} />
@@ -3646,7 +3674,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   </button>
                 )}
                 <div>
-                  <h2 className="font-semibold text-gray-900">Booking #{selectedBooking.id}</h2>
+                  <h2 className="font-semibold text-gray-900">Booking #{generateDisplayId(selectedBooking)}</h2>
                   <p className="text-xs text-gray-400">{selectedBooking.eventType} · {selectedBooking.date}</p>
                 </div>
               </div>
@@ -4616,7 +4644,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <p>Account No: {bankDetails.accountNumber}</p>
                     <p className="mt-1 font-semibold text-amber-700">Deposit Amount: £{selectedBooking.deposit.toLocaleString()}</p>
                   </div>
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\n🏦 Account Name: ${bankDetails.accountName}\n📋 Sort Code: ${bankDetails.sortCode}\n🔢 Account No: ${bankDetails.accountNumber}\n📌 Reference: ${selectedBooking.id}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, to confirm your ${selectedBooking.eventType} booking on ${selectedBooking.date}, please transfer the deposit of *£${selectedBooking.deposit.toLocaleString()}* to:\n\n🏦 Account Name: ${bankDetails.accountName}\n📋 Sort Code: ${bankDetails.sortCode}\n🔢 Account No: ${bankDetails.accountNumber}\n📌 Reference: ${generateDisplayId(selectedBooking)}\n\nOnce paid, please send a screenshot of the transfer confirmation. Thank you!`)}
                     target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center"
                     style={{ background: '#25D366', color: 'white' }}>
