@@ -381,7 +381,7 @@ export default function AdminPage() {
   const [loginForm, setLoginForm] = useState({ email: 'rahulbadugu22@gmail.com', password: '7981255989' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [userPermissions, setUserPermissions] = useState<string[] | 'all'>('all');
   const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role: string } | null>(null);
 
@@ -429,9 +429,9 @@ export default function AdminPage() {
           console.error("Error fetching permissions:", e);
           setCurrentUser({ name: 'Admin', email: user.email || '', role: 'Super Admin' });
           if (user.email === 'rahulbadugu22@gmail.com') {
-             setUserPermissions('all');
+            setUserPermissions('all');
           } else {
-             setUserPermissions([]);
+            setUserPermissions([]);
           }
         }
         setLoggedIn(true);
@@ -627,7 +627,7 @@ export default function AdminPage() {
       text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}\n${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
     } else if (menuType === 'Menu Categories' || menuType === 'Menu Items') {
       Object.keys(editableMenuCategories).forEach(catKey => {
-         text += `*${catKey.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}:*\n${(editableMenuCategories[catKey] || []).join(', ')}\n\n`;
+        text += `*${catKey.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}:*\n${(editableMenuCategories[catKey] || []).join(', ')}\n\n`;
       });
     } else if (menuType === 'Live Dosa Menu') {
       text += editableLiveDosaPartyMenu.pricing.join('\n') + '\n\n';
@@ -640,7 +640,7 @@ export default function AdminPage() {
     } else if (menuType === 'Extras') {
       text += (editableExtras || []).map(e => `• *${e.name}:* £${e.price}`).join('\n') + '\n\n';
     }
-    
+
     if (menuType.includes('Menu') || menuType === 'Extras' || menuType === 'Packages') {
       text += `Please reply with your preferred selections. We look forward to serving you! 🙏`;
     } else {
@@ -652,26 +652,26 @@ export default function AdminPage() {
   const buildStep1EnquiryWhatsAppText = (booking: Booking) => {
     let text = `Hi ${booking.name.split(' ')[0]}, thank you for your enquiry with Madras Flavours Events for your *${booking.eventType}* on *${booking.date || 'TBD'}*!\n\n`;
     text += `Here are our packages & pricing details:\n\n`;
-    
+
     // 1. Packages
     text += `*Catering Packages:*\n`;
     text += editableNewPackages.map((p: any) => `• *${p.name}:* £${p.pricePerPerson}/person\n  ${(p.items || []).join(', ')}`).join('\n\n') + '\n\n';
-    
+
     // 2. Live Dosa Counter
     text += `*Outdoor Live Dosa Counter:*\n`;
     text += editableLiveDosaPartyMenu.pricing.join('\n') + '\n';
     text += `Includes:\n${editableLiveDosaPartyMenu.items.join(', ')}\n\n`;
-    
+
     // 3. Extras
     text += `*Extras Available:*\n`;
     text += editableExtras.map((e: any) => `• ${e.name}: £${e.price.toFixed(2)}`).join('\n') + '\n\n';
-    
+
     // 4. Kids Pricing
     text += `*Kids Pricing* (Over 50 Adults):\n`;
     text += editableKidsPricing.map(kp => `• ${kp.ageRange}: ${kp.price}`).join('\n') + '\n\n';
-    
+
     text += `Please let us know your preferred options, estimated guest count, and any customizations you would like! 🙏`;
-    
+
     return buildWhatsAppLink(booking.phone, text);
   };
 
@@ -680,7 +680,7 @@ export default function AdminPage() {
     const kids4to10 = booking.kids4to10 || 0;
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
-    
+
     let extrasText = '';
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     if (extraChargesTotal > 0) {
@@ -694,7 +694,7 @@ export default function AdminPage() {
 
     const grandTotal = getTotalAmount(booking);
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
-    
+
     let menuItemsText = '';
     if (booking.selectedMenuItems && Object.keys(booking.selectedMenuItems).length > 0) {
       const categoryLabels: Record<string, string> = {
@@ -719,7 +719,7 @@ export default function AdminPage() {
     const grandTotal = getTotalAmount(booking);
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
-    
+
     return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
   };
 
@@ -728,7 +728,7 @@ export default function AdminPage() {
     const grandTotal = getTotalAmount(booking);
     const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
-    
+
     return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! Your booking account is now settled.\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
   };
 
@@ -808,17 +808,17 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
-    
+
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isFinalPaid = booking.finalPaymentPaid;
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
-    
+
     const totalPaid = (isDepositPaid ? booking.deposit : 0) +
-                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                      (isExtraPaid ? extraChargesTotal : 0);
-                      
+      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+      (isExtraPaid ? extraChargesTotal : 0);
+
     const remainingBalance = grandTotal - totalPaid;
-    
+
     const breakdownText = `*Payment Breakdown:*\n` +
       `• Deposit Paid: £${booking.deposit.toLocaleString()} (${isDepositPaid ? (booking.paymentMethodDeposit ? `Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
       `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
@@ -862,18 +862,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
         await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
       } catch (err: any) {
         if (loginForm.email === 'rahulbadugu22@gmail.com') {
-           const { createUserWithEmailAndPassword } = await import('firebase/auth');
-           try {
-               await createUserWithEmailAndPassword(auth, loginForm.email, loginForm.password);
-           } catch (createErr: any) {
-               if (createErr.code === 'auth/email-already-in-use') {
-                   // Account exists, but password was wrong.
-                   throw new Error('Account exists, but password is incorrect. (Try "password" instead of "7981255989"?)');
-               }
-               throw createErr;
-           }
+          const { createUserWithEmailAndPassword } = await import('firebase/auth');
+          try {
+            await createUserWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+          } catch (createErr: any) {
+            if (createErr.code === 'auth/email-already-in-use') {
+              // Account exists, but password was wrong.
+              throw new Error('Account exists, but password is incorrect. (Try "password" instead of "7981255989"?)');
+            }
+            throw createErr;
+          }
         } else {
-           throw err;
+          throw err;
         }
       }
       setLoggedIn(true);
@@ -992,15 +992,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Add date stamp
         const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
         ctx.font = 'bold 14px sans-serif';
         const textWidth = ctx.measureText(dateText).width;
-        
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(10, height - 34, textWidth + 20, 24);
-        
+
         ctx.fillStyle = '#FFFFFF';
         ctx.textBaseline = 'middle';
         ctx.fillText(dateText, 20, height - 22);
@@ -1076,15 +1076,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Add date stamp
         const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
         ctx.font = 'bold 14px sans-serif';
         const textWidth = ctx.measureText(dateText).width;
-        
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(10, height - 34, textWidth + 20, 24);
-        
+
         ctx.fillStyle = '#FFFFFF';
         ctx.textBaseline = 'middle';
         ctx.fillText(dateText, 20, height - 22);
@@ -1159,15 +1159,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
-        
+
         // Add date stamp
         const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
         ctx.font = 'bold 14px sans-serif';
         const textWidth = ctx.measureText(dateText).width;
-        
+
         ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
         ctx.fillRect(10, height - 34, textWidth + 20, 24);
-        
+
         ctx.fillStyle = '#FFFFFF';
         ctx.textBaseline = 'middle';
         ctx.fillText(dateText, 20, height - 22);
@@ -1204,14 +1204,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   const confirmFinalPayment = async (id: string, method: string) => {
     const currentBooking = bookings.find(b => b.id === id);
-    
+
     setBookings(prev => prev.map(b => b.id === id ? { ...b, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : b));
     setSelectedBooking(prev => prev?.id === id ? { ...prev, finalPaymentPaid: true, status: 'final_payment_received', paymentMethodFinal: method } : prev);
     try {
-      await setDoc(doc(db, 'booking_requests', id), { 
-        finalPaymentPaid: true, 
-        status: 'final_payment_received', 
-        paymentMethodFinal: method 
+      await setDoc(doc(db, 'booking_requests', id), {
+        finalPaymentPaid: true,
+        status: 'final_payment_received',
+        paymentMethodFinal: method
       }, { merge: true });
       if (currentBooking) {
         const bookingData = {
@@ -1320,21 +1320,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   const handleDiscountApproval = async (bookingId: string, approved: boolean) => {
     const b = bookings.find(x => x.id === bookingId);
     if (!b || !b.discountRequest) return;
-    
+
     if (approved) {
       const discount: Discount = {
         type: b.discountRequest.type,
         value: b.discountRequest.value,
         reason: b.discountRequest.reason
       };
-      
+
       const reqUpdated = { ...b.discountRequest, status: 'approved' as const };
-      
+
       setBookings(prev => prev.map(x => x.id === bookingId ? { ...x, discount, discountRequest: reqUpdated } : x));
       if (selectedBooking?.id === bookingId) {
         setSelectedBooking(prev => prev ? { ...prev, discount, discountRequest: reqUpdated } : prev);
       }
-      
+
       try {
         await setDoc(doc(db, 'booking_requests', bookingId), { discount, discountRequest: reqUpdated }, { merge: true });
         const cleanBookingData = { ...b, discount, discountRequest: reqUpdated, updatedAt: new Date().toISOString() };
@@ -1524,7 +1524,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const kids4to10 = booking.kids4to10 || 0;
     const kidsUnder4 = booking.kidsUnder4 || 0;
     const totalGuests = adults + kids4to10 + kidsUnder4;
-    
+
     // Format dates
     const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
     const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
@@ -1792,7 +1792,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
-    
+
     // Format dates
     const formattedDate = booking.date ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
     const formattedEnquiryDate = booking.enquiryDate ? new Date(booking.enquiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : 'N/A';
@@ -2176,24 +2176,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <td style="font-weight: bold; padding-top: 10px;">${isDepositInvoice ? 'Total Deposit Paid:' : 'Total Paid:'}</td>
               <td class="text-right" style="font-weight: bold; color: #2b7a4a; padding-top: 10px;">
                 £${(
-                  isDepositInvoice 
-                    ? (isDepositPaid ? booking.deposit : 0)
-                    : ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))
-                ).toLocaleString()}
+        isDepositInvoice
+          ? (isDepositPaid ? booking.deposit : 0)
+          : ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))
+      ).toLocaleString()}
               </td>
             </tr>
             <tr>
               <td style="font-weight: bold; padding-bottom: 10px;">${isDepositInvoice ? 'Deposit Amount Due Now:' : 'Remaining Balance Due:'}</td>
-              <td class="text-right" style="font-weight: bold; color: ${
-                isDepositInvoice
-                  ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? '#2b7a4a' : '#c86a00')
-                  : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? '#2b7a4a' : '#c86a00')
-              }; padding-bottom: 10px;">
-                ${
-                  isDepositInvoice
-                    ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? 'DEPOSIT PAID ✓' : `£${(booking.deposit - (isDepositPaid ? booking.deposit : 0)).toLocaleString()}`)
-                    : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))).toLocaleString()}`)
-                }
+              <td class="text-right" style="font-weight: bold; color: ${isDepositInvoice
+        ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? '#2b7a4a' : '#c86a00')
+        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? '#2b7a4a' : '#c86a00')
+      }; padding-bottom: 10px;">
+                ${isDepositInvoice
+        ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? 'DEPOSIT PAID ✓' : `£${(booking.deposit - (isDepositPaid ? booking.deposit : 0)).toLocaleString()}`)
+        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))).toLocaleString()}`)
+      }
               </td>
             </tr>
           </tbody>
@@ -2304,7 +2302,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
   };
 
   const pendingDiscounts = bookings.filter(b => b.discountRequest?.status === 'pending');
-  
+
   const navItems: { id: AdminTab; label: string; icon: string; badge?: number; requiredPerm?: string }[] = [
     { id: 'overview', label: 'Overview', icon: 'Squares2X2Icon' },
     { id: 'enquiries', label: 'Enquiries', icon: 'InboxIcon', badge: stats.newEnquiries, requiredPerm: 'manage_enquiries' },
@@ -2488,9 +2486,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
           {/* ─── MANUAL BOOKING ─── */}
           {activeTab === 'manual_booking' && (
             <div className="space-y-6">
-              <ManualBookingForm 
-                setCustomAlert={setCustomAlert} 
-                packages={editableNewPackages} 
+              <ManualBookingForm
+                setCustomAlert={setCustomAlert}
+                packages={editableNewPackages}
                 extras={EXTRAS}
                 onBookingCreated={(newBooking) => setSelectedBooking(newBooking)}
                 depositPercentage={pricingDetails.depositPercentage}
@@ -3049,7 +3047,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
           {/* ─── MENUS ─── */}
           {activeTab === 'menus' && (
-            <MenusTabUI 
+            <MenusTabUI
               packages={editableNewPackages} setPackages={setEditableNewPackages}
               categories={editableMenuCategories} setCategories={setEditableMenuCategories}
               liveMenu={editableLiveDosaPartyMenu} setLiveMenu={setEditableLiveDosaPartyMenu}
@@ -3441,7 +3439,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <button onClick={() => setDiscountTab('history')} className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-colors ${discountTab === 'history' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>History</button>
                   </div>
                 </div>
-                
+
                 {discountTab === 'pending' ? (
                   pendingDiscounts.length === 0 ? (
                     <div className="text-center py-12 text-gray-400 text-sm">
@@ -3452,7 +3450,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="space-y-4">
                       {pendingDiscounts.map(b => {
                         const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                        const discountReqVal = b.discountRequest?.type === 'percentage'
                           ? (totalBeforeDiscount * (b.discountRequest.value / 100))
                           : (b.discountRequest?.value || 0);
 
@@ -3474,7 +3472,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
                                 </div>
                               </div>
-                              
+
                               <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3 border border-gray-100 mb-2">
                                 <div>
                                   <div className="text-xs text-gray-400 mb-0.5">Event Type</div>
@@ -3485,7 +3483,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <div className="text-sm font-medium text-gray-800">{b.guests}</div>
                                 </div>
                               </div>
-                              
+
                               <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
                                 <div className="flex justify-between text-sm">
                                   <span className="text-gray-500 font-medium">Total (Base + Extras)</span>
@@ -3505,13 +3503,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 </div>
                               </div>
                             </div>
-                            
+
                             <div className="flex flex-col items-center gap-3 w-full lg:w-48 flex-shrink-0">
                               {/* Deposit Proof */}
                               {b.paymentProofDeposit ? (
                                 <div className="w-full text-center">
                                   <div className="text-xs font-semibold text-gray-500 mb-1.5">Deposit Payment</div>
-                                  <div 
+                                  <div
                                     className="w-full h-24 rounded-lg overflow-hidden border border-gray-200 cursor-pointer shadow-sm group relative"
                                     onClick={() => {
                                       if (b.paymentProofDeposit?.startsWith('data:image')) {
@@ -3534,7 +3532,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   <span className="text-[10px] font-medium">No Deposit Photo</span>
                                 </div>
                               )}
-                              
+
                               <div className="flex gap-2 w-full mt-auto">
                                 <button onClick={() => handleDiscountApproval(b.id, false)} className="flex-1 border border-red-200 text-red-600 hover:bg-red-50 font-semibold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1">
                                   <Icon name="XMarkIcon" size={14} /> Reject
@@ -3559,7 +3557,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="space-y-4">
                       {bookings.filter(b => b.discountRequest && b.discountRequest.status !== 'pending').map(b => {
                         const totalBeforeDiscount = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-                        const discountReqVal = b.discountRequest?.type === 'percentage' 
+                        const discountReqVal = b.discountRequest?.type === 'percentage'
                           ? (totalBeforeDiscount * (b.discountRequest.value / 100))
                           : (b.discountRequest?.value || 0);
 
@@ -3582,7 +3580,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 <div className="text-xs text-gray-600 mt-1 italic">"{b.discountRequest?.reason}"</div>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-6 text-sm text-gray-600 border-t border-gray-100 pt-3">
                               <div><span className="text-gray-400 mr-1">Event Type:</span> {b.eventType}</div>
                               <div><span className="text-gray-400 mr-1">Guests:</span> {b.guests}</div>
@@ -3611,7 +3609,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     Booking Timeline Tracker
                   </h3>
                   {trackingBookingId && (
-                    <button 
+                    <button
                       onClick={() => { setTrackingBookingId(''); setTrackerSearch(''); }}
                       className="text-sm font-semibold text-gray-600 hover:text-gray-900 flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-lg transition-colors"
                     >
@@ -3619,12 +3617,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </button>
                   )}
                 </div>
-                
+
                 {!trackingBookingId ? (
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="relative">
                       <Icon name="MagnifyingGlassIcon" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input 
+                      <input
                         type="text"
                         placeholder="Search orders by name, email, phone number, or event type..."
                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#ED1C24] transition-shadow shadow-sm"
@@ -3632,7 +3630,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         onChange={(e) => setTrackerSearch(e.target.value)}
                       />
                       {trackerSearch && (
-                        <button 
+                        <button
                           onClick={() => setTrackerSearch('')}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                         >
@@ -3643,15 +3641,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                     <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden max-h-[600px] overflow-y-auto">
                       {(() => {
-                        const filtered = bookings.filter(b => 
-                          b.name.toLowerCase().includes(trackerSearch.toLowerCase()) || 
+                        const filtered = bookings.filter(b =>
+                          b.name.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.email.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.phone.toLowerCase().includes(trackerSearch.toLowerCase()) ||
                           b.eventType.toLowerCase().includes(trackerSearch.toLowerCase())
                         );
 
                         return filtered.length > 0 ? filtered.map(b => (
-                          <div 
+                          <div
                             key={b.id}
                             onClick={() => {
                               setTrackingBookingId(b.id);
@@ -3693,9 +3691,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ) : (() => {
                   const tb = bookings.find(x => x.id === trackingBookingId);
                   if (!tb) return <div className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center">Booking not found.</div>;
-                  
+
                   const currentStepIdx = STATUS_FLOW.indexOf(tb.status);
-                  
+
                   return (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                       <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex items-center justify-between shadow-sm">
@@ -3709,13 +3707,13 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {STATUS_LABELS[tb.status]}
                         </span>
                       </div>
-                      
+
                       <div className="relative border-l-2 border-gray-200 ml-5 pl-8 space-y-8 mt-8 pb-4">
                         {STATUS_FLOW.map((step, idx) => {
                           const isCompleted = idx < currentStepIdx;
                           const isCurrent = idx === currentStepIdx;
                           const isPastOrCurrent = idx <= currentStepIdx;
-                          
+
                           return (
                             <div key={step} className="relative">
                               {/* Timeline dot */}
@@ -3723,22 +3721,22 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 {isCompleted && <Icon name="CheckIcon" size={12} className="text-white" />}
                                 {isCurrent && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
                               </div>
-                              
+
                               <div className={`font-bold text-sm ${isPastOrCurrent ? 'text-gray-900' : 'text-gray-400'}`}>
                                 Step {idx + 1}: {STATUS_LABELS[step]}
                               </div>
-                              
+
                               {/* Details if reached this step */}
                               {isPastOrCurrent && (
                                 <div className="mt-2.5 text-sm text-gray-600 bg-white border border-gray-100 shadow-sm rounded-xl p-4">
                                   {step === 'new_enquiry' && <div className="flex items-center gap-2"><Icon name="InboxIcon" size={16} className="text-gray-400" /> Enquiry received on <span className="font-semibold text-gray-800">{tb.enquiryDate || 'N/A'}</span>.</div>}
-                                  
+
                                   {step === 'menu_sent' && <div className="flex items-center gap-2"><Icon name="DocumentTextIcon" size={16} className="text-blue-500" /> Menu options sent to customer.</div>}
-                                  
+
                                   {step === 'menu_selected' && <div className="flex items-center gap-2"><Icon name="ListBulletIcon" size={16} className="text-amber-500" /> Selected Menu: <span className="font-semibold text-gray-800">{tb.selectedMenu || tb.package}</span></div>}
-                                  
+
                                   {step === 'deposit_pending' && <div className="flex items-center gap-2"><Icon name="ClockIcon" size={16} className="text-amber-600" /> Deposit requested: <span className="font-semibold text-gray-800">£{tb.deposit.toLocaleString()}</span></div>}
-                                  
+
                                   {step === 'deposit_confirmed' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Deposit fully received.</div>
@@ -3757,9 +3755,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'final_invoice_sent' && <div className="flex items-center gap-2"><Icon name="DocumentArrowUpIcon" size={16} className="text-blue-500" /> Final invoice sent. Balance Due: <span className="font-bold text-gray-900">£{(getTotalAmount(tb) - tb.deposit).toLocaleString()}</span></div>}
-                                  
+
                                   {step === 'final_payment_received' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2 text-emerald-600 font-semibold"><Icon name="CheckCircleIcon" size={18} /> Final Payment fully received.</div>
@@ -3778,9 +3776,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'event_scheduled' && <div className="flex items-center gap-2"><Icon name="CalendarDaysIcon" size={16} className="text-indigo-500" /> Event scheduled for <span className="font-semibold text-gray-800">{tb.date} at {tb.time}</span>.</div>}
-                                  
+
                                   {step === 'event_completed' && (
                                     <div className="space-y-3">
                                       <div className="flex items-center gap-2"><Icon name="FlagIcon" size={16} className="text-amber-500" /> Event has concluded.</div>
@@ -3802,7 +3800,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {step === 'completed' && (
                                     <div className="flex items-center gap-2 text-emerald-700 font-bold bg-emerald-50 px-4 py-2.5 rounded-lg border border-emerald-100">
                                       <Icon name="CheckBadgeIcon" size={20} /> Booking Successfully Closed
@@ -4245,7 +4243,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
                       const estTotal = (pkg.pricePerPerson * adults) + (kids4to10 * kidsPrice);
                       const totalGuests = adults + kids4to10 + kidsUnder4;
-                      
+
                       return (
                         <div key={pkg.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2.5 border border-purple-100">
                           <div>
@@ -4337,7 +4335,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           const adults = selectedBooking.adults ?? selectedBooking.guests;
                           const kids4to10 = selectedBooking.kids4to10 || 0;
-                          
+
                           const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                           const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
@@ -4410,7 +4408,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     {(() => {
                       const selectedPkgName = selectedBooking.selectedMenu || selectedBooking.package || '';
                       const selectedPackageObj = editableNewPackages.find(p => p.name === selectedPkgName);
-                      
+
                       if (!selectedPackageObj || !selectedPackageObj.items) return null;
 
                       return (
@@ -4420,10 +4418,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             {selectedPackageObj.items.map((itemStr: string) => {
                               const match = itemStr.match(/^(\d+)\s+(.+)$/i);
                               if (!match) return null;
-                              
+
                               const limit = parseInt(match[1], 10);
                               const catName = match[2].trim().toLowerCase();
-                              
+
                               let catKey = '';
                               if (catName.includes('stater')) catKey = 'staters';
                               else if (catName.includes('veg main')) catKey = 'vegMains';
@@ -4432,18 +4430,18 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               else if (catName.includes('dessert')) catKey = 'dessert';
                               else if (catName.includes('bread')) catKey = 'breads';
                               else if (catName.includes('dhal')) catKey = 'dhal';
-                              
+
                               if (!catKey || !editableMenuCategories[catKey]) return null;
-                              
+
                               const catOptions = editableMenuCategories[catKey];
                               const currentSelections = (selectedBooking.selectedMenuItems || {})[catKey] || [];
                               const isAtLimit = currentSelections.length >= limit;
-                              
+
                               const isExpanded = expandedCategoryKey === catKey;
-                              
+
                               return (
                                 <div key={catKey} className="border border-gray-200 rounded-lg bg-white overflow-hidden shadow-sm">
-                                  <div 
+                                  <div
                                     className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
                                     onClick={() => setExpandedCategoryKey(isExpanded ? null : catKey)}
                                   >
@@ -4477,15 +4475,15 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                                 } else {
                                                   newSelections = newSelections.filter(v => v !== opt);
                                                 }
-                                                
+
                                                 const updatedMenuData = {
                                                   ...(selectedBooking.selectedMenuItems || {}),
                                                   [catKey]: newSelections
                                                 };
-                                                
+
                                                 setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, selectedMenuItems: updatedMenuData } : b));
                                                 setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, selectedMenuItems: updatedMenuData } : prev);
-                                                
+
                                                 try {
                                                   await setDoc(doc(db, 'booking_requests', selectedBooking.id), { selectedMenuItems: updatedMenuData }, { merge: true });
                                                   await setDoc(doc(db, 'bookings', selectedBooking.id), { selectedMenuItems: updatedMenuData, updatedAt: new Date().toISOString() }, { merge: true });
@@ -4513,62 +4511,62 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     {((selectedBooking.selectedMenu || selectedBooking.package || '').toLowerCase().includes('dosa')) && (
                       <div className="mt-3 border-t border-amber-200/50 pt-3">
                         <label className="block text-xs font-semibold text-gray-500 mb-2">Select Extras (Optional)</label>
-                      <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
-                        {EXTRAS.map((extra) => {
-                          const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
-                          return (
-                            <label key={extra.name} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50 p-1.5 rounded transition-colors">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={async (e) => {
-                                  const checked = e.target.checked;
-                                  let newExtraCharges = [...(selectedBooking.extraCharges || [])];
-                                  if (checked) {
-                                    if (!newExtraCharges.some(c => c.label === extra.name)) {
-                                      const adults = (selectedBooking.adults ?? selectedBooking.guests) || 0;
-                                      const kids4to10 = selectedBooking.kids4to10 || 0;
-                                      const payingGuests = adults + kids4to10;
-                                      const isFlatFee = extra.name.toLowerCase().includes('flat fee');
-                                      const finalAmount = isFlatFee ? extra.price : extra.price * payingGuests;
-                                      
-                                      newExtraCharges.push({ label: extra.name, amount: finalAmount, isPreset: true, unitPrice: extra.price });
+                        <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2.5 bg-white shadow-inner">
+                          {EXTRAS.map((extra) => {
+                            const isChecked = (selectedBooking.extraCharges || []).some(c => c.label === extra.name);
+                            return (
+                              <label key={extra.name} className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none hover:bg-gray-50 p-1.5 rounded transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={async (e) => {
+                                    const checked = e.target.checked;
+                                    let newExtraCharges = [...(selectedBooking.extraCharges || [])];
+                                    if (checked) {
+                                      if (!newExtraCharges.some(c => c.label === extra.name)) {
+                                        const adults = (selectedBooking.adults ?? selectedBooking.guests) || 0;
+                                        const kids4to10 = selectedBooking.kids4to10 || 0;
+                                        const payingGuests = adults + kids4to10;
+                                        const isFlatFee = extra.name.toLowerCase().includes('flat fee');
+                                        const finalAmount = isFlatFee ? extra.price : extra.price * payingGuests;
+
+                                        newExtraCharges.push({ label: extra.name, amount: finalAmount, isPreset: true, unitPrice: extra.price });
+                                      }
+                                    } else {
+                                      newExtraCharges = newExtraCharges.filter(c => c.label !== extra.name);
                                     }
-                                  } else {
-                                    newExtraCharges = newExtraCharges.filter(c => c.label !== extra.name);
-                                  }
 
-                                  // Update locally
-                                  setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
-                                    ...b,
-                                    extraCharges: newExtraCharges
-                                  } : b));
-                                  setSelectedBooking(prev => prev?.id === selectedBooking.id ? {
-                                    ...prev,
-                                    extraCharges: newExtraCharges
-                                  } : prev);
+                                    // Update locally
+                                    setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
+                                      ...b,
+                                      extraCharges: newExtraCharges
+                                    } : b));
+                                    setSelectedBooking(prev => prev?.id === selectedBooking.id ? {
+                                      ...prev,
+                                      extraCharges: newExtraCharges
+                                    } : prev);
 
-                                  // Save to Firestore
-                                  try {
-                                    await setDoc(doc(db, 'booking_requests', selectedBooking.id), { extraCharges: newExtraCharges }, { merge: true });
-                                    await setDoc(doc(db, 'bookings', selectedBooking.id), {
-                                      ...selectedBooking,
-                                      extraCharges: newExtraCharges,
-                                      updatedAt: new Date().toISOString()
-                                    }, { merge: true });
-                                  } catch (err) {
-                                    console.error('Error saving extra charges:', err);
-                                  }
-                                }}
-                                className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                              />
-                              <span className="flex-1 text-gray-800">{extra.name}</span>
-                              <span className="font-semibold text-amber-700">£{extra.price}</span>
-                            </label>
-                          );
-                        })}
+                                    // Save to Firestore
+                                    try {
+                                      await setDoc(doc(db, 'booking_requests', selectedBooking.id), { extraCharges: newExtraCharges }, { merge: true });
+                                      await setDoc(doc(db, 'bookings', selectedBooking.id), {
+                                        ...selectedBooking,
+                                        extraCharges: newExtraCharges,
+                                        updatedAt: new Date().toISOString()
+                                      }, { merge: true });
+                                    } catch (err) {
+                                      console.error('Error saving extra charges:', err);
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                />
+                                <span className="flex-1 text-gray-800">{extra.name}</span>
+                                <span className="font-semibold text-amber-700">£{extra.price}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
                     )}
 
                     {/* Guest Breakdown for Pricing Calculation */}
@@ -4615,7 +4613,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                               }
 
-                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+                              const defaultDeposit = baseAmount > 0 ? Math.min(baseAmount, pricingDetails.depositPercentage) : 0;
+                              const deposit = selectedBooking.deposit > 0 ? selectedBooking.deposit : defaultDeposit;
 
                               const payingGuests = adults + kids4to10;
                               const newExtraCharges = (selectedBooking.extraCharges || []).map(c => {
@@ -4628,7 +4627,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, baseAmount, deposit, extraCharges: newExtraCharges } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, baseAmount, deposit, extraCharges: newExtraCharges } : prev);
-                              
+
                               const updates = { guests, adults, baseAmount, deposit, extraCharges: newExtraCharges };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -4677,7 +4676,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                 baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
                               }
 
-                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+                              const defaultDeposit = baseAmount > 0 ? Math.min(baseAmount, pricingDetails.depositPercentage) : 0;
+                              const deposit = selectedBooking.deposit > 0 ? selectedBooking.deposit : defaultDeposit;
 
                               const payingGuests = adults + kids4to10;
                               const newExtraCharges = (selectedBooking.extraCharges || []).map(c => {
@@ -4690,7 +4690,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges } : prev);
-                              
+
                               const updates = { guests, adults, kids4to10, baseAmount, deposit, extraCharges: newExtraCharges };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -4710,7 +4710,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const adults = selectedBooking.adults ?? selectedBooking.guests;
                               const kids4to10 = selectedBooking.kids4to10 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
+
                               let pricePerPerson = 0;
                               const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
                               if (found) pricePerPerson = found.pricePerPerson;
@@ -4719,11 +4719,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
                               const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
-                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+                              const defaultDeposit = baseAmount > 0 ? Math.min(baseAmount, pricingDetails.depositPercentage) : 0;
+                              const deposit = selectedBooking.deposit > 0 ? selectedBooking.deposit : defaultDeposit;
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, guests, adults, kidsUnder4, baseAmount, deposit } : b));
                               setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, guests, adults, kidsUnder4, baseAmount, deposit } : prev);
-                              
+
                               const updates = { guests, adults, kidsUnder4, baseAmount, deposit };
                               await setDoc(doc(db, 'booking_requests', selectedBooking.id), updates, { merge: true });
                               await setDoc(doc(db, 'bookings', selectedBooking.id), updates, { merge: true });
@@ -4744,7 +4745,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             value={selectedBooking.baseAmount || ''}
                             onChange={async (e) => {
                               const baseAmount = Number(e.target.value) || 0;
-                              const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
+                              const defaultDeposit = baseAmount > 0 ? Math.min(baseAmount, pricingDetails.depositPercentage) : 0;
+                              const deposit = selectedBooking.deposit > 0 ? selectedBooking.deposit : defaultDeposit;
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
@@ -4771,10 +4773,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           <label className="block text-xs font-semibold text-gray-500 mb-1">Deposit Required (£)</label>
                           <input
                             type="number"
-                            min={pricingDetails.depositPercentage}
-                            value={Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage) || ''}
+                            min={0}
+                            value={selectedBooking.deposit || ''}
                             onChange={async (e) => {
-                              const deposit = Math.max(Number(e.target.value) || 0, pricingDetails.depositPercentage);
+                              const deposit = Number(e.target.value) || 0;
 
                               setBookings(prev => prev.map(b => b.id === selectedBooking.id ? {
                                 ...b,
@@ -4918,11 +4920,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   key={opt.value}
                                   type="button"
                                   onClick={() => setDepositPaymentMethod(opt.value)}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
-                                    isSelected
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${isSelected
                                       ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                  }`}
+                                    }`}
                                 >
                                   <span>{opt.label}</span>
                                   {isSelected && (
@@ -5292,11 +5293,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                                   key={opt.value}
                                   type="button"
                                   onClick={() => setFinalPaymentMethod(opt.value)}
-                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
-                                    isSelected
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${isSelected
                                       ? 'border-amber-500 bg-amber-50 text-amber-800 shadow-sm'
                                       : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                                  }`}
+                                    }`}
                                 >
                                   <span>{opt.label}</span>
                                   {isSelected && (
@@ -5429,20 +5429,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     const nonPresetExtras = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
                     const nonPresetTotal = nonPresetExtras.reduce((s, c) => s + c.amount, 0);
                     const presetTotal = extraChargesTotal - nonPresetTotal;
-                    
+
                     const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
-                    
+
                     const isDepositPaid = selectedBooking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(selectedBooking.status);
                     const isFinalPaid = selectedBooking.finalPaymentPaid;
                     const isNonPresetPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra;
-                    
+
                     const paidExtrasAmount = (isFinalPaid ? presetTotal : 0) + (isNonPresetPaid ? nonPresetTotal : 0);
                     const isExtraPaid = (extraChargesTotal === 0) || (paidExtrasAmount === extraChargesTotal) || selectedBooking.status === 'completed';
-                    
+
                     const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
-                                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
-                                      paidExtrasAmount;
-                                      
+                      (isFinalPaid ? finalPaymentPaidAmt : 0) +
+                      paidExtrasAmount;
+
                     const remainingBalance = grandTotal - totalPaid;
 
                     return (
@@ -5461,7 +5461,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                         <div className="border-t border-dashed border-gray-200 mt-2 pt-2 space-y-1">
                           <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Payment Breakdown</div>
-                          
+
                           {/* Deposit */}
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500">Deposit</span>
@@ -5584,10 +5584,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                   >
                     <Icon name={(!selectedBooking.paymentProofDeposit || !depositPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                    {!selectedBooking.paymentProofDeposit 
-                      ? 'Upload Screenshot to Proceed' 
-                      : !depositPaymentMethod 
-                        ? 'Select Payment Method to Proceed' 
+                    {!selectedBooking.paymentProofDeposit
+                      ? 'Upload Screenshot to Proceed'
+                      : !depositPaymentMethod
+                        ? 'Select Payment Method to Proceed'
                         : 'Confirm Deposit Received'}
                   </button>
                 </div>
@@ -5630,10 +5630,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   className={`w-full font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all ${(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'}`}
                 >
                   <Icon name={(!selectedBooking.paymentProofFinal || !finalPaymentMethod) ? "LockClosedIcon" : "CheckCircleIcon"} size={16} />
-                  {!selectedBooking.paymentProofFinal 
-                    ? 'Upload Screenshot to Proceed' 
-                    : !finalPaymentMethod 
-                      ? 'Select Payment Method to Proceed' 
+                  {!selectedBooking.paymentProofFinal
+                    ? 'Upload Screenshot to Proceed'
+                    : !finalPaymentMethod
+                      ? 'Select Payment Method to Proceed'
                       : 'Confirm Final Payment'}
                 </button>
               )}
@@ -5685,7 +5685,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 const nonPreset = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
                 const extraChargesTotal = nonPreset.reduce((sum, c) => sum + c.amount, 0);
                 const isExtraPaymentNeeded = extraChargesTotal > 0 && selectedBooking.finalPaymentPaid;
-                
+
                 return (
                   <div className="space-y-3">
                     {isExtraPaymentNeeded && (
@@ -5697,7 +5697,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <p className="text-xs text-red-700 mb-3 leading-relaxed">
                           Extra charges were added to this event. You must upload the payment screenshot for the remaining balance before closing the event.
                         </p>
-                        
+
                         <a href={buildWhatsAppLink(selectedBooking.phone, buildExtraInvoiceWhatsAppText(selectedBooking, bankDetails))}
                           target="_blank" rel="noopener noreferrer"
                           className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl mb-3 transition-colors hover:bg-green-600"
@@ -5777,7 +5777,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         )}
                       </div>
                     )}
-                    
+
                     {isExtraPaymentNeeded && selectedBooking.paymentProofExtra && (
                       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mt-3">
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Extra Payment Method</label>
@@ -5795,14 +5795,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </div>
                     )}
 
-                    <button 
+                    <button
                       onClick={async () => {
                         if (isExtraPaymentNeeded && extraPaymentMethod) {
-                           try {
-                             await setDoc(doc(db, 'booking_requests', selectedBooking.id), { paymentMethodExtra: extraPaymentMethod }, { merge: true });
-                             setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, paymentMethodExtra: extraPaymentMethod } : b));
-                             setSelectedBooking(prev => prev ? { ...prev, paymentMethodExtra: extraPaymentMethod } : prev);
-                           } catch (e) {}
+                          try {
+                            await setDoc(doc(db, 'booking_requests', selectedBooking.id), { paymentMethodExtra: extraPaymentMethod }, { merge: true });
+                            setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, paymentMethodExtra: extraPaymentMethod } : b));
+                            setSelectedBooking(prev => prev ? { ...prev, paymentMethodExtra: extraPaymentMethod } : prev);
+                          } catch (e) { }
                         }
                         updateStatus(selectedBooking.id, 'completed')
                       }}

@@ -49,7 +49,7 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], extra
       }
     }
 
-    const dep = (base * (depositPercentage / 100));
+    const dep = base > 0 ? Math.min(base, depositPercentage) : 0;
     
     setForm(prev => {
       if (prev.baseAmount !== base.toString() || prev.deposit !== dep.toFixed(2)) {

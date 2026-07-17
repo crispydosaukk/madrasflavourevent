@@ -18,7 +18,7 @@ const Footer: React.FC = () => {
         </div>
         <div className="flex items-center gap-5 text-sm text-midnight-text">
           <a href="#" className="hover:text-white transition-colors">Privacy</a>
-          <a href="#" className="hover:text-white transition-colors">Terms</a>
+          <a href="/terms" className="hover:text-white transition-colors">Terms</a>
           <a href="mailto:hello@madrasflavoursevents.com" className="hover:text-white transition-colors">Contact</a>
         </div>
       </div>

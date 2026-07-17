@@ -235,7 +235,7 @@ export default function HomePage() {
         baseAmount = selectedExtra.price;
       }
       
-      const deposit = (baseAmount * pricingDetails.depositPercentage) / 100;
+      const deposit = baseAmount > 0 ? Math.min(baseAmount, pricingDetails.depositPercentage) : 0;
       
       await addDoc(collection(db, 'booking_requests'), {
         name: bookingForm.name,
