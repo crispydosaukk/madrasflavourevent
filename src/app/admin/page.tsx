@@ -62,6 +62,7 @@ interface Booking {
   package: string;
   selectedMenu?: string;
   selectedMenuItems?: Record<string, string[]>;
+  deliveryOption?: string;
   vatRate?: number;
   extraCharges: ExtraCharge[];
   paymentProofDeposit?: string;
@@ -1749,6 +1750,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <span class="details-label">Total Guests</span>
               <span class="details-value">${totalGuests} Guests</span>
             </div>
+            ${booking.deliveryOption ? `
+            <div class="details-row">
+              <span class="details-label">Delivery Option</span>
+              <span class="details-value">${booking.deliveryOption}</span>
+            </div>
+            ` : ''}
           </div>
         </div>
 
@@ -2069,6 +2076,12 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <span class="details-label">Total Guests</span>
               <span class="details-value">${adults + kids4to10 + kidsUnder4} Guests</span>
             </div>
+            ${booking.deliveryOption ? `
+            <div class="details-row">
+              <span class="details-label">Delivery Option</span>
+              <span class="details-value">${booking.deliveryOption}</span>
+            </div>
+            ` : ''}
           </div>
         </div>
 
@@ -4404,6 +4417,31 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       </select>
                     </div>
 
+                    <div className="mt-3">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Select Delivery Option</label>
+                      <select
+                        value={selectedBooking.deliveryOption || ''}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, deliveryOption: val } : b));
+                          setSelectedBooking(prev => prev?.id === selectedBooking.id ? { ...prev, deliveryOption: val } : prev);
+                          
+                          try {
+                            await setDoc(doc(db, 'booking_requests', selectedBooking.id), { deliveryOption: val }, { merge: true });
+                            await setDoc(doc(db, 'bookings', selectedBooking.id), { deliveryOption: val, updatedAt: new Date().toISOString() }, { merge: true });
+                          } catch (err) {
+                            console.error('Error saving delivery option:', err);
+                          }
+                        }}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
+                      >
+                        <option value="">-- Choose Delivery Option --</option>
+                        <option value="Delivery with food warmers">Delivery with food warmers</option>
+                        <option value="Bulk Delivery">Bulk Delivery</option>
+                        <option value="Live Catering">Live Catering</option>
+                      </select>
+                    </div>
+
                     {/* Select Menu Items UI */}
                     {(() => {
                       const selectedPkgName = selectedBooking.selectedMenu || selectedBooking.package || '';
@@ -5667,7 +5705,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               )}
               {selectedBooking.status === 'event_scheduled' && (
                 <div className="space-y-2">
-                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Madras Flavours Events is coming up on *${selectedBooking.date}* at *${selectedBooking.time}*!\n\n📌 *Important Setup Requirements:*\n• Customers must provide two serving tables (4ft x 4ft) and one power point.\n\nWe look forward to seeing you and serving your guests! 🎉`)}
+                  <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, just a reminder — your ${selectedBooking.eventType} at Madras Flavours Events is coming up on *${selectedBooking.date}* at *${selectedBooking.time}*!\n\nWe look forward to seeing you and serving your guests! 🎉`)}
                     target="_blank" rel="noopener noreferrer"
                     className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl"
                     style={{ background: '#25D366', color: 'white' }}>
