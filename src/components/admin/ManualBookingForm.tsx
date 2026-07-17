@@ -4,7 +4,7 @@ import Icon from '@/components/ui/AppIcon';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 
-export default function ManualBookingForm({ setCustomAlert, packages = [], onBookingCreated, depositPercentage = 30 }: { setCustomAlert: any, packages?: any[], onBookingCreated?: (booking: any) => void, depositPercentage?: number }) {
+export default function ManualBookingForm({ setCustomAlert, packages = [], extras = [], onBookingCreated, depositPercentage = 30, timeSlots = [] }: { setCustomAlert: any, packages?: any[], extras?: any[], onBookingCreated?: (booking: any) => void, depositPercentage?: number, timeSlots?: string[] }) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -18,28 +18,50 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
     package: 'Classic Buffet',
     baseAmount: '',
     deposit: '',
+    postCode: '',
+    address: '',
   });
 
   useEffect(() => {
     const selectedPkg = packages.find(p => p.name === form.package);
+    let base = 0;
+    
     if (selectedPkg && selectedPkg.pricePerPerson && form.guests) {
       const guests = parseInt(form.guests) || 0;
-      const base = guests * selectedPkg.pricePerPerson;
-      const dep = (base * (depositPercentage / 100));
-      
-      setForm(prev => {
-        // Only update if it actually changed to prevent infinite loops, though useEffect deps handle this
-        if (prev.baseAmount !== base.toString() || prev.deposit !== dep.toFixed(2)) {
-          return {
-            ...prev,
-            baseAmount: base.toString(),
-            deposit: dep.toFixed(2)
-          };
+      base = guests * selectedPkg.pricePerPerson;
+    } else if (form.package === 'Outdoor Live Dosa Party') {
+      const guests = parseInt(form.guests) || 0;
+      let dosaPrice = 11.00;
+      if (form.date) {
+        const d = new Date(form.date);
+        const day = d.getDay();
+        if (day === 0 || day === 6) {
+          dosaPrice = 12.00;
         }
-        return prev;
-      });
+      }
+      base = guests * dosaPrice;
+    } else {
+      const selectedExtra = extras.find(e => e.name === form.package);
+      if (selectedExtra && selectedExtra.price) {
+        base = selectedExtra.price;
+      } else {
+        return;
+      }
     }
-  }, [form.package, form.guests, packages, depositPercentage]);
+
+    const dep = (base * (depositPercentage / 100));
+    
+    setForm(prev => {
+      if (prev.baseAmount !== base.toString() || prev.deposit !== dep.toFixed(2)) {
+        return {
+          ...prev,
+          baseAmount: base.toString(),
+          deposit: dep.toFixed(2)
+        };
+      }
+      return prev;
+    });
+  }, [form.package, form.guests, packages, extras, depositPercentage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +86,8 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
         status: 'new_enquiry',
         depositPaid: false,
         finalPaymentPaid: false,
+        postCode: form.postCode,
+        address: form.address,
         createdAt: new Date().toISOString(),
       };
 
@@ -75,7 +99,7 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
 
       setCustomAlert({ message: 'Manual booking created successfully!', type: 'success' });
       setForm({
-        name: '', email: '', phone: '', eventType: 'Wedding', date: '', time: '', guests: '', notes: '', package: 'Classic Buffet', baseAmount: '', deposit: ''
+        name: '', email: '', phone: '', eventType: 'Wedding', date: '', time: '', guests: '', notes: '', package: 'Classic Buffet', baseAmount: '', deposit: '', postCode: '', address: ''
       });
       if (onBookingCreated) {
         onBookingCreated({ ...bookingData, id: docRef.id });
@@ -117,6 +141,14 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
               <label className="block text-xs font-semibold text-gray-600 mb-1">Email Address</label>
               <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24]" placeholder="john@example.com" />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Post Code *</label>
+              <input type="text" required value={form.postCode} onChange={e => setForm({...form, postCode: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24]" placeholder="SW1A 1AA" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Address *</label>
+              <input type="text" required value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24]" placeholder="Full Address" />
+            </div>
           </div>
 
           {/* Event Details */}
@@ -147,8 +179,14 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Event Time</label>
                 <select value={form.time} onChange={e => setForm({...form, time: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24] bg-white">
                   <option value="">Select time</option>
-                  <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                  <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
+                  {timeSlots.length > 0 ? timeSlots.map(slot => (
+                    <option key={slot} value={slot}>{slot}</option>
+                  )) : (
+                    <>
+                      <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
+                      <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
@@ -163,9 +201,22 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], onBoo
               <label className="block text-xs font-semibold text-gray-600 mb-1">Package / Menu</label>
               <select value={form.package} onChange={e => setForm({...form, package: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24] bg-white">
                 <option value="">Select a package...</option>
-                {packages.map((pkg, i) => (
-                  <option key={pkg.id || i} value={pkg.name}>{pkg.name}</option>
-                ))}
+                <optgroup label="── Outdoor Catering Packages ──">
+                  {packages.map((pkg, i) => (
+                    <option key={pkg.id || i} value={pkg.name}>{pkg.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="── Live Dosa Party ──">
+                  <option value="Outdoor Live Dosa Party">Outdoor Live Dosa Party</option>
+                </optgroup>
+                <optgroup label="── Extras ──">
+                  {extras.filter(extra => extra.name === 'Gazebo Hire (Flat Fee)').map((extra, idx) => (
+                    <option key={`extra-${idx}`} value={extra.name}>{extra.name}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="── Custom ──">
+                  <option value="custom">Custom Price Package</option>
+                </optgroup>
               </select>
             </div>
             <div>

@@ -72,6 +72,31 @@ export default function HomePage() {
     });
   }, []);
 
+  const [formSettings, setFormSettings] = useState({
+    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+  });
+
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'form_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFormSettings({
+          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+        });
+      }
+    });
+  }, []);
+
+  const [minGuests, setMinGuests] = useState(100);
+  React.useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'venue_details'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMinGuests(Number(data.minGuests) || 100);
+      }
+    });
+  }, []);
+
   React.useEffect(() => {
     return onSnapshot(collection(db, 'blocked_dates'), (snapshot) => {
       const dates = snapshot.docs.map(doc => doc.id);
@@ -125,7 +150,7 @@ export default function HomePage() {
   ];
 
   const [bookingForm, setBookingForm] = useState({
-    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '',
+    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: ''
   });
 
   const handleEnquireNow = (packageName: string) => {
@@ -176,6 +201,15 @@ export default function HomePage() {
       const fullPhone = bookingForm.phone ? `+44${bookingForm.phone.replace(/^0/, '').replace(/\s/g, '')}` : '';
       const guestCount = Number(bookingForm.guests) || 0;
       
+      if (guestCount < minGuests) {
+        setCustomHomeAlert({
+          message: `The minimum number of guests required is ${minGuests}. We cannot accept orders below this amount.`,
+          type: 'error'
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
       const selectedPkg = NEW_PACKAGES.find(p => p.name === bookingForm.selectedPackage);
       const isLiveDosa = bookingForm.selectedPackage === 'Outdoor Live Dosa Party';
       let selectedExtra = null;
@@ -188,7 +222,15 @@ export default function HomePage() {
         baseAmount = selectedPkg.pricePerPerson * guestCount;
       } else if (isLiveDosa) {
         // live dosa party base estimation
-        baseAmount = 11.00 * guestCount;
+        let dosaPrice = 11.00;
+        if (bookingForm.date) {
+          const d = new Date(bookingForm.date);
+          const day = d.getDay();
+          if (day === 0 || day === 6) {
+            dosaPrice = 12.00;
+          }
+        }
+        baseAmount = dosaPrice * guestCount;
       } else if (selectedExtra) {
         baseAmount = selectedExtra.price;
       }
@@ -205,6 +247,8 @@ export default function HomePage() {
         guests: guestCount,
         message: bookingForm.message,
         package: bookingForm.selectedPackage || 'Not Selected',
+        postCode: bookingForm.postCode,
+        address: bookingForm.address,
         baseAmount,
         deposit,
         extraCharges: [],
@@ -213,7 +257,7 @@ export default function HomePage() {
 
       setSubmitted(true);
       setPhoneError('');
-      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '' });
+      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: '' });
     } catch (error: any) {
       console.error("Error submitting request: ", error);
       setCustomHomeAlert({
@@ -315,6 +359,16 @@ export default function HomePage() {
                       </select>
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Post Code *</label>
+                      <input type="text" required value={bookingForm.postCode} onChange={(e) => setBookingForm({ ...bookingForm, postCode: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. SW1A 1AA" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Address *</label>
+                      <input type="text" required value={bookingForm.address} onChange={(e) => setBookingForm({ ...bookingForm, address: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="Full Address" />
+                    </div>
+                  </div>
                   {/* Preferred Package */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1 flex items-center gap-1.5">
@@ -373,13 +427,19 @@ export default function HomePage() {
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time of Day *</label>
                       <select required value={bookingForm.timeOfDay} onChange={(e) => setBookingForm({ ...bookingForm, timeOfDay: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
                         <option value="">Select time</option>
-                        <option value="Lunch (12:00pm – 4:00pm)">Lunch (12:00pm – 4:00pm)</option>
-                        <option value="Dinner (6:00pm – 11:30pm)">Dinner (6:00pm – 11:30pm)</option>
+                        {formSettings.timeSlots.length > 0 ? formSettings.timeSlots.map(slot => (
+                          <option key={slot} value={slot}>{slot}</option>
+                        )) : (
+                          <>
+                            <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
+                            <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
+                          </>
+                        )}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Guests *</label>
-                      <input type="number" required min={1} max={500} value={bookingForm.guests} onChange={(e) => setBookingForm({ ...bookingForm, guests: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. 100" />
+                      <input type="number" required min={minGuests} max={500} value={bookingForm.guests} onChange={(e) => setBookingForm({ ...bookingForm, guests: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder={`e.g. ${minGuests}`} />
                     </div>
                   </div>
                   <div>

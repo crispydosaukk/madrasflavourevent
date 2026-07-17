@@ -43,6 +43,8 @@ interface Booking {
   name: string;
   email: string;
   phone: string;
+  postCode?: string;
+  address?: string;
   eventType: string;
   date: string;
   time: string;
@@ -326,6 +328,8 @@ export default function AdminPage() {
           name: data.name || 'Unknown',
           email: data.email || 'N/A',
           phone: data.phone || 'N/A',
+          postCode: data.postCode || 'N/A',
+          address: data.address || 'N/A',
           eventType: data.eventType || 'N/A',
           date: data.date || 'N/A',
           time: data.timeOfDay || 'N/A',
@@ -493,7 +497,7 @@ export default function AdminPage() {
 
   const [venueDetails, setVenueDetails] = useState({
     venueName: 'Madras Flavours Events',
-    maxCapacity: '500',
+    minGuests: '100',
     contactEmail: 'hello@madrasflavoursevents.com',
     phone: '+44 7700 900000',
     whatsapp: '+447700900000',
@@ -506,7 +510,7 @@ export default function AdminPage() {
         const data = docSnap.data();
         setVenueDetails({
           venueName: data.venueName || 'Madras Flavours Events',
-          maxCapacity: data.maxCapacity || '500',
+          minGuests: data.minGuests || '100',
           contactEmail: data.contactEmail || 'hello@madrasflavoursevents.com',
           phone: data.phone || '+44 7700 900000',
           whatsapp: data.whatsapp || '+447700900000',
@@ -532,6 +536,23 @@ export default function AdminPage() {
           minimumBookingHours: data.minimumBookingHours || 4,
           weekdayRate: data.weekdayRate || 350,
           weekendRate: data.weekendRate || 550
+        });
+      }
+    });
+  }, []);
+
+  const [formSettings, setFormSettings] = useState({
+    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+  });
+  const [isSavingFormSettings, setIsSavingFormSettings] = useState(false);
+  const [newTimeSlot, setNewTimeSlot] = useState('');
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'site_data', 'form_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFormSettings({
+          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
         });
       }
     });
@@ -969,7 +990,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, width, height);
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Add date stamp
+        const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
+        ctx.font = 'bold 14px sans-serif';
+        const textWidth = ctx.measureText(dateText).width;
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(10, height - 34, textWidth + 20, 24);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateText, 20, height - 22);
+      }
 
       const base64String = canvas.toDataURL('image/jpeg', 0.7);
 
@@ -1039,7 +1074,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, width, height);
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Add date stamp
+        const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
+        ctx.font = 'bold 14px sans-serif';
+        const textWidth = ctx.measureText(dateText).width;
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(10, height - 34, textWidth + 20, 24);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateText, 20, height - 22);
+      }
 
       const base64String = canvas.toDataURL('image/jpeg', 0.7);
 
@@ -1108,7 +1157,21 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, width, height);
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Add date stamp
+        const dateText = `Uploaded: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`;
+        ctx.font = 'bold 14px sans-serif';
+        const textWidth = ctx.measureText(dateText).width;
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(10, height - 34, textWidth + 20, 24);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dateText, 20, height - 22);
+      }
 
       const base64String = canvas.toDataURL('image/jpeg', 0.7);
 
@@ -1418,6 +1481,19 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     }
   };
 
+  const saveFormSettings = async () => {
+    setIsSavingFormSettings(true);
+    try {
+      await setDoc(doc(db, 'site_data', 'form_settings'), formSettings, { merge: true });
+      setCustomAlert({ message: 'Form settings updated successfully!', type: 'success' });
+    } catch (error) {
+      console.error('Error saving form settings:', error);
+      setCustomAlert({ message: 'Error saving form settings.', type: 'error' });
+    } finally {
+      setIsSavingFormSettings(false);
+    }
+  };
+
   const getDiscountAmount = (b: Booking) => {
     if (!b.discount) return 0;
     const subtotal = b.baseAmount + (b.extraCharges || []).reduce((s, c) => s + c.amount, 0);
@@ -1652,6 +1728,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <div class="details-row">
               <span class="details-label">Email</span>
               <span class="details-value">${booking.email || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Address</span>
+              <span class="details-value">${booking.address || 'N/A'} (${booking.postCode || 'N/A'})</span>
             </div>
           </div>
 
@@ -1968,6 +2048,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <div class="details-row">
               <span class="details-label">Email</span>
               <span class="details-value">${booking.email || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Address</span>
+              <span class="details-value">${booking.address || 'N/A'} (${booking.postCode || 'N/A'})</span>
             </div>
           </div>
 
@@ -2304,7 +2388,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
   // ─── DASHBOARD ────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Sidebar */}
@@ -2407,8 +2491,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <ManualBookingForm 
                 setCustomAlert={setCustomAlert} 
                 packages={editableNewPackages} 
+                extras={EXTRAS}
                 onBookingCreated={(newBooking) => setSelectedBooking(newBooking)}
                 depositPercentage={pricingDetails.depositPercentage}
+                timeSlots={formSettings.timeSlots}
               />
             </div>
           )}
@@ -3160,8 +3246,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <input type="text" value={venueDetails.venueName} onChange={(e) => setVenueDetails(prev => ({ ...prev, venueName: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Max Capacity</label>
-                      <input type="number" value={venueDetails.maxCapacity} onChange={(e) => setVenueDetails(prev => ({ ...prev, maxCapacity: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Minimum Guests</label>
+                      <input type="number" value={venueDetails.minGuests} onChange={(e) => setVenueDetails(prev => ({ ...prev, minGuests: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Contact Email</label>
@@ -3231,6 +3317,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     </button>
                   </div>
                 </div>
+
               </div>
 
               {/* Right Column */}
@@ -3253,6 +3340,66 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Account Number</label>
                       <input type="text" value={bankDetails.accountNumber} onChange={(e) => updateBankDetail('accountNumber', e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none bg-gray-50" />
                     </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-200 p-5">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Icon name="ClockIcon" size={18} style={{ color: '#ED1C24' }} />
+                    Booking Form Settings
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Time of Day Slots</label>
+                      <div className="space-y-2 mb-3">
+                        {formSettings.timeSlots.map((slot, index) => (
+                          <div key={index} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+                            <span>{slot}</span>
+                            <button
+                              onClick={() => {
+                                const newSlots = [...formSettings.timeSlots];
+                                newSlots.splice(index, 1);
+                                setFormSettings({ ...formSettings, timeSlots: newSlots });
+                              }}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Icon name="XMarkIcon" size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        {formSettings.timeSlots.length === 0 && (
+                          <span className="text-xs text-gray-400 italic">No time slots added.</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newTimeSlot}
+                          onChange={(e) => setNewTimeSlot(e.target.value)}
+                          placeholder="e.g. Breakfast (8am - 11am)"
+                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50"
+                        />
+                        <button
+                          onClick={() => {
+                            if (newTimeSlot.trim()) {
+                              setFormSettings({ ...formSettings, timeSlots: [...formSettings.timeSlots, newTimeSlot.trim()] });
+                              setNewTimeSlot('');
+                            }
+                          }}
+                          className="bg-gray-900 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={saveFormSettings}
+                      disabled={isSavingFormSettings}
+                      className="text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-all mt-2 shadow-md active:scale-95 disabled:opacity-50 w-full"
+                      style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}
+                    >
+                      {isSavingFormSettings ? 'Saving...' : 'Save Form Settings'}
+                    </button>
                   </div>
                 </div>
 
@@ -3727,6 +3874,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     <div className="font-semibold text-gray-900">{selectedBooking.name}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.email}</div>
                     <div className="text-sm text-gray-500">{selectedBooking.phone}</div>
+                    <div className="text-sm text-gray-500">{selectedBooking.address && selectedBooking.address !== 'N/A' ? `${selectedBooking.address} (${selectedBooking.postCode})` : 'No address provided'}</div>
                   </div>
                   <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, this is Madras Flavours Events regarding your ${selectedBooking.eventType} booking.`)}
                     target="_blank" rel="noopener noreferrer"
@@ -3948,9 +4096,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       }}
                       className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-yellow-500 font-medium text-gray-900"
                     >
-                      <option value="Morning">Morning</option>
-                      <option value="Afternoon">Afternoon</option>
-                      <option value="Evening">Evening</option>
+                      {formSettings.timeSlots.map(slot => (
+                        <option key={slot} value={slot}>{slot}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -4165,6 +4313,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           } else if (foundExtra) {
                             selectedPkgName = foundExtra.name;
                             baseAmount = foundExtra.price;
+                          } else if (val === 'Outdoor Live Dosa Party') {
+                            selectedPkgName = 'Outdoor Live Dosa Party';
+                            let dosaPrice = 11.00;
+                            if (selectedBooking.date && selectedBooking.date !== 'N/A') {
+                              const d = new Date(selectedBooking.date);
+                              const day = d.getDay();
+                              if (day === 0 || day === 6) {
+                                dosaPrice = 12.00;
+                              }
+                            }
+                            pricePerPerson = dosaPrice;
                           } else {
                             const found = editableNewPackages.find(p => p.name === val);
                             if (found) {
@@ -4224,27 +4383,24 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
                       >
                         <option value="">-- Choose Package --</option>
-                        <optgroup label="Buffet Packages">
+                        <optgroup label="── Outdoor Catering Packages ──">
                           {editableNewPackages.map(pkg => (
                             <option key={pkg.id} value={pkg.name}>
                               {pkg.name} (£{pkg.pricePerPerson}/person)
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="Other Enquiries">
-                          <option value="Venue Hire">Venue Hire</option>
-                          <option value="Dry Hire">Dry Hire</option>
-                          <option value="Table Service">Table Service</option>
-                          <option value="Kids Pricing">Kids Pricing</option>
+                        <optgroup label="── Live Dosa Party ──">
+                          <option value="Outdoor Live Dosa Party">Outdoor Live Dosa Party</option>
                         </optgroup>
-                        <optgroup label="Extras">
-                          {EXTRAS.map(extra => (
+                        <optgroup label="── Extras ──">
+                          {EXTRAS.filter(extra => extra.name === 'Gazebo Hire (Flat Fee)').map(extra => (
                             <option key={extra.name} value={extra.name}>
                               {extra.name} (£{extra.price})
                             </option>
                           ))}
                         </optgroup>
-                        <optgroup label="Custom">
+                        <optgroup label="── Custom ──">
                           <option value="custom">Custom Price Package</option>
                         </optgroup>
                       </select>
@@ -4430,15 +4586,35 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const kids4to10 = selectedBooking.kids4to10 || 0;
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
                               let pricePerPerson = 0;
-                              const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
-                              if (found) pricePerPerson = found.pricePerPerson;
-
+                              let baseAmount = 0;
+                              const val = selectedBooking.selectedMenu || selectedBooking.package;
+                              const foundExtra = EXTRAS.find(ex => ex.name === val);
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-                              const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              if (val === 'custom') {
+                                baseAmount = selectedBooking.baseAmount || 0;
+                              } else if (foundExtra) {
+                                baseAmount = foundExtra.price;
+                              } else {
+                                if (val === 'Outdoor Live Dosa Party') {
+                                  let dosaPrice = 11.00;
+                                  if (selectedBooking.date && selectedBooking.date !== 'N/A') {
+                                    const d = new Date(selectedBooking.date);
+                                    const day = d.getDay();
+                                    if (day === 0 || day === 6) {
+                                      dosaPrice = 12.00;
+                                    }
+                                  }
+                                  pricePerPerson = dosaPrice;
+                                } else {
+                                  const found = editableNewPackages.find(p => p.name === val);
+                                  if (found) pricePerPerson = found.pricePerPerson;
+                                }
+                                baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              }
+
                               const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
 
                               const payingGuests = adults + kids4to10;
@@ -4472,15 +4648,35 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                               const adults = selectedBooking.adults ?? selectedBooking.guests;
                               const kidsUnder4 = selectedBooking.kidsUnder4 || 0;
                               const guests = adults + kids4to10 + kidsUnder4;
-                              
                               let pricePerPerson = 0;
-                              const found = editableNewPackages.find(p => p.name === (selectedBooking.selectedMenu || selectedBooking.package));
-                              if (found) pricePerPerson = found.pricePerPerson;
-
+                              let baseAmount = 0;
+                              const val = selectedBooking.selectedMenu || selectedBooking.package;
+                              const foundExtra = EXTRAS.find(ex => ex.name === val);
                               const kidsPriceStr = editableKidsPricing.find(k => k.ageRange.includes('3-10') || k.ageRange.includes('4-10') || k.ageRange.includes('4'))?.price || '20';
                               const kidsPrice = parseInt(kidsPriceStr.replace(/[^0-9]/g, '')) || 20;
 
-                              const baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              if (val === 'custom') {
+                                baseAmount = selectedBooking.baseAmount || 0;
+                              } else if (foundExtra) {
+                                baseAmount = foundExtra.price;
+                              } else {
+                                if (val === 'Outdoor Live Dosa Party') {
+                                  let dosaPrice = 11.00;
+                                  if (selectedBooking.date && selectedBooking.date !== 'N/A') {
+                                    const d = new Date(selectedBooking.date);
+                                    const day = d.getDay();
+                                    if (day === 0 || day === 6) {
+                                      dosaPrice = 12.00;
+                                    }
+                                  }
+                                  pricePerPerson = dosaPrice;
+                                } else {
+                                  const found = editableNewPackages.find(p => p.name === val);
+                                  if (found) pricePerPerson = found.pricePerPerson;
+                                }
+                                baseAmount = (adults * pricePerPerson) + (kids4to10 * kidsPrice);
+                              }
+
                               const deposit = Math.max(selectedBooking.deposit || 0, pricingDetails.depositPercentage);
 
                               const payingGuests = adults + kids4to10;
