@@ -2387,7 +2387,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     { id: 'settings', label: 'Settings', icon: 'Cog6ToothIcon', requiredPerm: 'manage_settings' },
     { id: 'access', label: 'Access Control', icon: 'ShieldCheckIcon', requiredPerm: 'manage_access' },
     { id: 'tracker', label: 'Booking Tracker', icon: 'MapIcon', requiredPerm: 'manage_tracker' },
-    { id: 'manual_booking', label: 'Direct Booking', icon: 'PlusCircleIcon', requiredPerm: 'manage_manual_booking' },
+    // { id: 'manual_booking', label: 'Direct Booking', icon: 'PlusCircleIcon', requiredPerm: 'manage_manual_booking' },
   ];
 
   const visibleNavItems = navItems.filter(item => {
@@ -2561,7 +2561,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 setCustomAlert={setCustomAlert}
                 packages={editableNewPackages}
                 extras={EXTRAS}
-                onBookingCreated={(newBooking) => setSelectedBooking(newBooking)}
+                onBookingCreated={(newBooking) => setCustomAlert({ message: `Booking #${newBooking.id.slice(-6).toUpperCase()} has been successfully created.`, type: 'success' })}
                 depositPercentage={pricingDetails.depositPercentage}
                 timeSlots={formSettings.timeSlots}
               />
