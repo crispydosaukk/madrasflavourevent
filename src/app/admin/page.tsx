@@ -278,6 +278,13 @@ type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers'
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
+
+const PRESET_EXTRA_CHARGES = [
+  { label: 'Extra Time Charge (Per Hour)', amount: 100 },
+  { label: 'Indoor Screen Charge', amount: 150 },
+  { label: 'Cleaning Charge', amount: 50 },
+];
+
 const WHATSAPP_TERMS_TEXT = `*Important Terms & Conditions:*
 • AFTER TIME SLOT PER HOUR £100 WILL BE CHARGED EXTRA
 • Regarding the venue if the total costs come below £600 there will be a hall charge same as an event price.
@@ -577,6 +584,7 @@ export default function AdminPage() {
   const [editableNewPackages, setEditableNewPackages] = useState<any[]>(NEW_PACKAGES.map(pkg => ({ ...pkg })));
   const [editableMenuCategories, setEditableMenuCategories] = useState<any>(JSON.parse(JSON.stringify(MENU_CATEGORIES)));
   const [editableLiveDosaPartyMenu, setEditableLiveDosaPartyMenu] = useState<any>(JSON.parse(JSON.stringify(LIVE_DOSA_PARTY_MENU)));
+  const [editableStandardExtraCharges, setEditableStandardExtraCharges] = useState<any[]>(PRESET_EXTRA_CHARGES);
   const [editableExtras, setEditableExtras] = useState<any[]>(EXTRAS.map(ex => ({ ...ex })));
 
   // Editable venue/table/kids
@@ -598,6 +606,7 @@ export default function AdminPage() {
         if (data.NEW_PACKAGES) setEditableNewPackages(data.NEW_PACKAGES);
         if (data.MENU_CATEGORIES) setEditableMenuCategories(data.MENU_CATEGORIES);
         if (data.LIVE_DOSA_PARTY_MENU) setEditableLiveDosaPartyMenu(data.LIVE_DOSA_PARTY_MENU);
+        if (data.STANDARD_EXTRA_CHARGES) setEditableStandardExtraCharges(data.STANDARD_EXTRA_CHARGES);
         if (data.EXTRAS) setEditableExtras(data.EXTRAS);
 
         // Keep the old venue/kids/hire prices from previous structure if they exist in a separate doc or same doc
@@ -616,6 +625,7 @@ export default function AdminPage() {
         NEW_PACKAGES: editableNewPackages,
         MENU_CATEGORIES: editableMenuCategories,
         LIVE_DOSA_PARTY_MENU: editableLiveDosaPartyMenu,
+        STANDARD_EXTRA_CHARGES: editableStandardExtraCharges,
         EXTRAS: editableExtras,
         TABLE_SERVICE: editableTableService,
         KIDS_PRICING: editableKidsPricing,
@@ -1261,6 +1271,36 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
       setCustomAlert({ message: 'Error deleting booking. Please try again.', type: 'error' });
     } finally {
       setBookingToDelete(null);
+    }
+  };
+
+  
+  const togglePresetExtraCharge = async (id: string, label: string, amount: number) => {
+    const currentBooking = bookings.find(b => b.id === id);
+    if (!currentBooking) return;
+    
+    let newExtraCharges = currentBooking.extraCharges || [];
+    const exists = newExtraCharges.some(c => c.label === label);
+    
+    if (exists) {
+      newExtraCharges = newExtraCharges.filter(c => c.label !== label);
+    } else {
+      newExtraCharges = [...newExtraCharges, { label, amount, isPreset: true }];
+    }
+
+    setBookings(prev => prev.map(b => b.id === id ? { ...b, extraCharges: newExtraCharges } : b));
+    setSelectedBooking(prev => prev?.id === id ? { ...prev, extraCharges: newExtraCharges } : prev);
+
+    try {
+      await setDoc(doc(db, 'booking_requests', id), { extraCharges: newExtraCharges }, { merge: true });
+      const bookingData = {
+        ...currentBooking,
+        extraCharges: newExtraCharges,
+      };
+      
+    } catch (error) {
+      console.error('Error toggling preset extra charge:', error);
+      alert('Error updating extra charges.');
     }
   };
 
@@ -3083,6 +3123,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               categories={editableMenuCategories} setCategories={setEditableMenuCategories}
               liveMenu={editableLiveDosaPartyMenu} setLiveMenu={setEditableLiveDosaPartyMenu}
               extras={editableExtras} setExtras={setEditableExtras}
+              standardExtraCharges={editableStandardExtraCharges} setStandardExtraCharges={setEditableStandardExtraCharges}
               tableService={editableTableService} setTableService={setEditableTableService}
               kidsPricing={editableKidsPricing} setKidsPricing={setEditableKidsPricing}
               dryHire={editableDryHirePrices} setDryHire={setEditableDryHirePrices}
@@ -5170,6 +5211,31 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                       <Icon name="PlusIcon" size={16} />
                     </button>
                   </div>
+
+                  <details className="mt-3 bg-white border border-teal-200 rounded-lg group">
+                    <summary className="px-3 py-2 text-sm font-semibold text-teal-700 cursor-pointer list-none flex justify-between items-center outline-none">
+                      Add Standard Extra Charges
+                      <Icon name="ChevronDownIcon" size={16} className="group-open:rotate-180 transition-transform" />
+                    </summary>
+                    <div className="p-3 border-t border-teal-100 flex flex-col gap-2">
+                      {editableStandardExtraCharges.map((preset, idx) => {
+                        const isChecked = selectedBooking.extraCharges.some(c => c.label === preset.label);
+                        return (
+                          <label key={idx} className="flex items-center gap-2 cursor-pointer text-sm text-gray-700 hover:bg-gray-50 px-2 py-1.5 rounded-md transition-colors">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                              checked={isChecked}
+                              onChange={() => togglePresetExtraCharge(selectedBooking.id, preset.label, preset.amount)}
+                            />
+                            <span className="flex-1">{preset.label}</span>
+                            <span className="font-medium text-gray-900">+£{preset.amount}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </details>
+
                 </div>
               )}
 
@@ -5662,14 +5728,14 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl w-full justify-center text-emerald-800 bg-white border border-emerald-300 hover:bg-emerald-50 shadow-sm transition-colors"
                       >
                         <Icon name="ArrowDownTrayIcon" size={16} />
-                        Download Final Invoice
+                        Download Deposit Invoice
                       </button>
                       <button onClick={() => updateStatus(selectedBooking.id, 'final_invoice_sent')}
                         disabled={selectedBooking.discountRequest?.status === 'pending'}
                         className={`w-full text-white font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 ${selectedBooking.discountRequest?.status === 'pending' ? 'opacity-50 cursor-not-allowed' : ''}`}
                         style={{ background: 'linear-gradient(135deg, #ED1C24, #F5A623)' }}>
                         <Icon name="DocumentTextIcon" size={16} />
-                        {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Final Invoice (above)'}
+                        {selectedBooking.discountRequest?.status === 'pending' ? 'Awaiting Discount Approval' : 'Send Deposit Invoice (above)'}
                       </button>
                     </>
                   )}

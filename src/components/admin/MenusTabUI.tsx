@@ -6,6 +6,7 @@ type Props = {
   categories: any; setCategories: React.Dispatch<React.SetStateAction<any>>;
   liveMenu: any; setLiveMenu: React.Dispatch<React.SetStateAction<any>>;
   extras: any[]; setExtras: React.Dispatch<React.SetStateAction<any[]>>;
+  standardExtraCharges?: any[]; setStandardExtraCharges?: React.Dispatch<React.SetStateAction<any[]>>;
   tableService: any[]; setTableService: React.Dispatch<React.SetStateAction<any[]>>;
   kidsPricing: any[]; setKidsPricing: React.Dispatch<React.SetStateAction<any[]>>;
   dryHire: any[]; setDryHire: React.Dispatch<React.SetStateAction<any[]>>;
@@ -15,7 +16,7 @@ type Props = {
 
 export default function MenusTabUI({
   packages, setPackages, categories, setCategories, liveMenu, setLiveMenu,
-  extras, setExtras, tableService, setTableService, kidsPricing, setKidsPricing,
+  extras, setExtras, standardExtraCharges, setStandardExtraCharges, tableService, setTableService, kidsPricing, setKidsPricing,
   dryHire, setDryHire, save, isSaving
 }: Props) {
   type Tab = 'packages' | 'categories' | 'live' | 'extras' | 'venue';
@@ -23,6 +24,8 @@ export default function MenusTabUI({
 
   const [newExtraName, setNewExtraName] = useState('');
   const [newExtraPrice, setNewExtraPrice] = useState('');
+  const [newStdName, setNewStdName] = useState('');
+  const [newStdPrice, setNewStdPrice] = useState('');
 
   const [newCategoryItem, setNewCategoryItem] = useState<{ [key: string]: string }>({});
 
@@ -125,6 +128,7 @@ export default function MenusTabUI({
       )}
 
       {activeTab === 'extras' && (
+        <>
         <div className="bg-white rounded-xl border border-gray-200 p-5 max-w-2xl">
           <h3 className="font-semibold text-gray-900 mb-4">Extras & Upgrades</h3>
           <div className="space-y-2 mb-4">
@@ -152,6 +156,35 @@ export default function MenusTabUI({
             </button>
           </div>
         </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5 max-w-2xl mt-4">
+          <h3 className="font-semibold text-gray-900 mb-4">Standard Adjustments (Fixed Fees)</h3>
+          <div className="space-y-2 mb-4">
+            {standardExtraCharges?.map((charge, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <input type="text" value={charge.label} onChange={e => setStandardExtraCharges && setStandardExtraCharges(p => p.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                <span className="text-gray-500">£</span>
+                <input type="number" value={charge.amount} onChange={e => setStandardExtraCharges && setStandardExtraCharges(p => p.map((x, idx) => idx === i ? { ...x, amount: Number(e.target.value) } : x))} className="w-24 text-right border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+                <button onClick={() => setStandardExtraCharges && setStandardExtraCharges(p => p.filter((_, idx) => idx !== i))} className="p-2 text-gray-400 hover:text-red-500">
+                  <Icon name="TrashIcon" size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <input type="text" placeholder="New standard charge..." value={newStdName} onChange={e => setNewStdName(e.target.value)} className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <input type="number" placeholder="Amount (£)" value={newStdPrice} onChange={e => setNewStdPrice(e.target.value)} className="w-24 text-right border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            <button onClick={() => {
+              if (newStdName.trim() && setStandardExtraCharges) {
+                setStandardExtraCharges(p => [...(p || []), { label: newStdName.trim(), amount: Number(newStdPrice) || 0 }]);
+                setNewStdName(''); setNewStdPrice('');
+              }
+            }} className="text-white text-sm font-semibold px-3 py-2 rounded-lg bg-teal-500">
+              <Icon name="PlusIcon" size={16} />
+            </button>
+          </div>
+        </div>
+        </>
       )}
       
       {activeTab === 'venue' && (
