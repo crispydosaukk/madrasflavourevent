@@ -150,7 +150,7 @@ export default function HomePage() {
   ];
 
   const [bookingForm, setBookingForm] = useState({
-    name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: ''
+    name: '', email: '', phone: '', eventType: '', serviceType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: ''
   });
 
   const handleEnquireNow = (packageName: string) => {
@@ -242,6 +242,7 @@ export default function HomePage() {
         email: bookingForm.email,
         phone: fullPhone,
         eventType: bookingForm.eventType,
+        serviceType: bookingForm.serviceType,
         date: bookingForm.date,
         timeOfDay: bookingForm.timeOfDay,
         guests: guestCount,
@@ -257,7 +258,7 @@ export default function HomePage() {
 
       setSubmitted(true);
       setPhoneError('');
-      setBookingForm({ name: '', email: '', phone: '', eventType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: '' });
+      setBookingForm({ name: '', email: '', phone: '', eventType: '', serviceType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: '' });
     } catch (error: any) {
       console.error("Error submitting request: ", error);
       setCustomHomeAlert({
@@ -358,6 +359,15 @@ export default function HomePage() {
                         {EVENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
+                  </div>
+                  {/* Service Type */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Service Type *</label>
+                    <select required value={bookingForm.serviceType} onChange={(e) => setBookingForm({ ...bookingForm, serviceType: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
+                      <option value="">Select Service Type</option>
+                      <option value="Party Hall Booking">In-House Party Hall Booking</option>
+                      <option value="Outdoor Catering">Outdoor Catering (At your location)</option>
+                    </select>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>

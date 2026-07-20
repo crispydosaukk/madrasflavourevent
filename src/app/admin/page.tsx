@@ -46,6 +46,7 @@ interface Booking {
   postCode?: string;
   address?: string;
   eventType: string;
+  serviceType?: string;
   date: string;
   time: string;
   guests: number;
@@ -276,6 +277,15 @@ function buildWhatsAppLink(phone: string, message: string) {
 type AdminTab = 'overview' | 'enquiries' | 'bookings' | 'calendar' | 'customers' | 'payments' | 'menus' | 'history' | 'settings' | 'access' | 'discount_approvals' | 'tracker' | 'manual_booking';
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
+
+const WHATSAPP_TERMS_TEXT = `*Important Terms & Conditions:*
+• AFTER TIME SLOT PER HOUR £100 WILL BE CHARGED EXTRA
+• Regarding the venue if the total costs come below £600 there will be a hall charge same as an event price.
+• If it's indoor the screen costs will be £150.
+• For cleaning there will be a charge of £50.
+• If it's indoor we won't provide any decoration; guests should hire by themselves.
+• We provide table clothes, one designated Waiter for buffet service and tabletops.
+• The hall capacity is 70 people; if there are more people we would setup the same setting outside with Gazebo and Marquee. There will be a separate charge for the setup based on the count of customers.`;
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -712,7 +722,7 @@ export default function AdminPage() {
 
     const packageText = `*Menu Selection:*\n• Package: *${booking.selectedMenu || booking.package}*\n${menuItemsText}`;
 
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! Here is a summary of your confirmed selections:\n\n*Event Details:*\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n${packageText}\n*Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}${vatText}\n• Grand Total: *£${grandTotal.toLocaleString()}*\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nThank you for choosing Madras Flavours Events! Here is a summary of your confirmed selections:\n\n*Event Details:*\n• Date: ${booking.date}\n• Event Type: ${booking.eventType}\n\n${packageText}\n*Guests:*\n${guestBreakdown}\n• Total Guests: ${adults + kids4to10 + kidsUnder4}\n${extrasText}\n\n*Pricing Details:*\n• Base Amount: £${booking.baseAmount.toLocaleString()}${vatText}\n• Grand Total: *£${grandTotal.toLocaleString()}*\n• Deposit Required: *£${booking.deposit.toLocaleString()}*\n\n${WHATSAPP_TERMS_TEXT}\n\nPlease let us know if this summary is correct. Once you confirm, we will send our bank details for the deposit payment! 🙏`);
   };
 
   const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
@@ -1743,6 +1753,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <span class="details-value">${booking.eventType || 'N/A'}</span>
             </div>
             <div class="details-row">
+              <span class="details-label">Service Type</span>
+              <span class="details-value">${booking.serviceType || 'Not Selected'}</span>
+            </div>
+            <div class="details-row">
               <span class="details-label">Date & Time</span>
               <span class="details-value">${formattedDate} (${booking.time || 'N/A'})</span>
             </div>
@@ -2067,6 +2081,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             <div class="details-row">
               <span class="details-label">Event Type</span>
               <span class="details-value">${booking.eventType || 'N/A'}</span>
+            </div>
+            <div class="details-row">
+              <span class="details-label">Service Type</span>
+              <span class="details-value">${booking.serviceType || 'Not Selected'}</span>
             </div>
             <div class="details-row">
               <span class="details-label">Date & Time</span>
@@ -4263,7 +4281,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             <div className="text-sm font-medium text-gray-900">{pkg.name}</div>
                             <div className="text-xs text-gray-500">£{pkg.pricePerPerson}/person · Est. £{estTotal.toLocaleString()} for {totalGuests} guests</div>
                           </div>
-                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n*Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n*Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n*Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\nPlease reply with your selection! 🙏`)}
+                          <a href={buildWhatsAppLink(selectedBooking.phone, `Hi ${selectedBooking.name.split(' ')[0]}, here is our *${pkg.name}* at *£${pkg.pricePerPerson}/person* (Excl. VAT):\n\n*Included Items:*\n${(pkg.items || []).map((item: string) => `• ${item}`).join('\\n')}${pkg.guestLabel ? `\n\n ${pkg.guestLabel}` : ''}${pkg.complimentary ? `\n ${pkg.complimentary}` : ''}\n\nFor ${adults} Adults and ${kids4to10} Kids, estimated total: *£${estTotal.toLocaleString()}* (Excl. VAT)\n\n*Kids Pricing*:\n${editableKidsPricing.map((kp: any) => `${kp.ageRange}: ${kp.price}`).join('\\n')}\n\n*Extras Available:*\n${editableExtras.map((e: any) => `• ${e.name}: £${e.price}`).join('\\n')}\n\n${WHATSAPP_TERMS_TEXT}\n\nPlease reply with your selection! 🙏`)}
                             target="_blank" rel="noopener noreferrer"
                             className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex-shrink-0 ml-2"
                             style={{ background: '#25D366', color: 'white' }}>
