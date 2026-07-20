@@ -5,7 +5,7 @@ import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-export default function ManualBookingForm({ setCustomAlert, packages = [], extras = [], onBookingCreated, depositPercentage = 30, timeSlots = [], initialData, onUpdate, renderMenuSelectionUI, downloadInvoicePDF, downloadMenuPDF, onClose }: { setCustomAlert: any, packages?: any[], extras?: any[], onBookingCreated?: (booking: any) => void, depositPercentage?: number, timeSlots?: string[], initialData?: any, onUpdate?: (booking: any) => void, renderMenuSelectionUI?: () => React.ReactNode, downloadInvoicePDF?: (booking: any, isDeposit?: boolean) => void, downloadMenuPDF?: (booking: any) => void, onClose?: () => void }) {
+export default function ManualBookingForm({ setCustomAlert, packages = [], extras = [], onBookingCreated, depositPercentage = 30, timeSlots = [], partyHallTimeSlots = [], outdoorTimeSlots = [], initialData, onUpdate, renderMenuSelectionUI, downloadInvoicePDF, downloadMenuPDF, onClose }: { setCustomAlert: any, packages?: any[], extras?: any[], onBookingCreated?: (booking: any) => void, depositPercentage?: number, timeSlots?: string[], partyHallTimeSlots?: string[], outdoorTimeSlots?: string[], initialData?: any, onUpdate?: (booking: any) => void, renderMenuSelectionUI?: () => React.ReactNode, downloadInvoicePDF?: (booking: any, isDeposit?: boolean) => void, downloadMenuPDF?: (booking: any) => void, onClose?: () => void }) {
   const [loading, setLoading] = useState(false);
   const [depositPreview, setDepositPreview] = useState<string | null>(null);
   const [finalPreview, setFinalPreview] = useState<string | null>(null);
@@ -650,14 +650,17 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], extra
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Event Time</label>
                 <select value={form.time} onChange={e => setForm({...form, time: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24] bg-white">
                   <option value="">Select time</option>
-                  {timeSlots.length > 0 ? timeSlots.map(slot => (
-                    <option key={slot} value={slot}>{slot}</option>
-                  )) : (
-                    <>
-                      <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
-                      <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
-                    </>
-                  )}
+                  {(() => {
+                    const activeSlots = form.serviceType === 'Party Hall Booking' && partyHallTimeSlots && partyHallTimeSlots.length > 0 ? partyHallTimeSlots : (form.serviceType === 'Outdoor Catering' && outdoorTimeSlots && outdoorTimeSlots.length > 0 ? outdoorTimeSlots : timeSlots);
+                    return activeSlots.length > 0 ? activeSlots.map(slot => (
+                      <option key={slot} value={slot}>{slot}</option>
+                    )) : (
+                      <>
+                        <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
+                        <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
+                      </>
+                    );
+                  })()}
                 </select>
               </div>
             </div>

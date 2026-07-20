@@ -73,7 +73,9 @@ export default function HomePage() {
   }, []);
 
   const [formSettings, setFormSettings] = useState({
-    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+    partyHallTimeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+    outdoorTimeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
   });
 
   React.useEffect(() => {
@@ -81,7 +83,9 @@ export default function HomePage() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setFormSettings({
-          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+          partyHallTimeSlots: data.partyHallTimeSlots || data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+          outdoorTimeSlots: data.outdoorTimeSlots || data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
         });
       }
     });
@@ -371,12 +375,12 @@ export default function HomePage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Post Code *</label>
-                      <input type="text" required value={bookingForm.postCode} onChange={(e) => setBookingForm({ ...bookingForm, postCode: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. SW1A 1AA" />
-                    </div>
-                    <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Address *</label>
                       <input type="text" required value={bookingForm.address} onChange={(e) => setBookingForm({ ...bookingForm, address: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="Full Address" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Post Code *</label>
+                      <input type="text" required value={bookingForm.postCode} onChange={(e) => setBookingForm({ ...bookingForm, postCode: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500" placeholder="e.g. SW1A 1AA" />
                     </div>
                   </div>
                   {/* Preferred Package */}
@@ -437,14 +441,17 @@ export default function HomePage() {
                       <label className="block text-xs font-medium text-gray-700 mb-1">Time of Day *</label>
                       <select required value={bookingForm.timeOfDay} onChange={(e) => setBookingForm({ ...bookingForm, timeOfDay: e.target.value })} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:border-yellow-500 bg-white">
                         <option value="">Select time</option>
-                        {formSettings.timeSlots.length > 0 ? formSettings.timeSlots.map(slot => (
-                          <option key={slot} value={slot}>{slot}</option>
-                        )) : (
-                          <>
-                            <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
-                            <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
-                          </>
-                        )}
+                        {(() => {
+                          const activeSlots = bookingForm.serviceType === 'Party Hall Booking' && formSettings.partyHallTimeSlots?.length > 0 ? formSettings.partyHallTimeSlots : (bookingForm.serviceType === 'Outdoor Catering' && formSettings.outdoorTimeSlots?.length > 0 ? formSettings.outdoorTimeSlots : formSettings.timeSlots);
+                          return activeSlots.length > 0 ? activeSlots.map(slot => (
+                            <option key={slot} value={slot}>{slot}</option>
+                          )) : (
+                            <>
+                              <option value="Lunch (12:00pm - 4:00pm)">Lunch (12:00pm - 4:00pm)</option>
+                              <option value="Dinner (6:00pm - 11:30pm)">Dinner (6:00pm - 11:30pm)</option>
+                            </>
+                          );
+                        })()}
                       </select>
                     </div>
                     <div>

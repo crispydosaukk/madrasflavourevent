@@ -560,17 +560,22 @@ export default function AdminPage() {
   }, []);
 
   const [formSettings, setFormSettings] = useState({
-    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+    timeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+    partyHallTimeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+    outdoorTimeSlots: ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
   });
   const [isSavingFormSettings, setIsSavingFormSettings] = useState(false);
-  const [newTimeSlot, setNewTimeSlot] = useState('');
+  const [newPartyHallTimeSlot, setNewPartyHallTimeSlot] = useState('');
+  const [newOutdoorTimeSlot, setNewOutdoorTimeSlot] = useState('');
 
   useEffect(() => {
     return onSnapshot(doc(db, 'site_data', 'form_settings'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         setFormSettings({
-          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
+          timeSlots: data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+          partyHallTimeSlots: data.partyHallTimeSlots || data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)'],
+          outdoorTimeSlots: data.outdoorTimeSlots || data.timeSlots || ['Lunch (12:00pm - 4:00pm)', 'Dinner (6:00pm - 11:30pm)']
         });
       }
     });
@@ -2564,6 +2569,8 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 onBookingCreated={(newBooking) => setCustomAlert({ message: `Booking #${newBooking.id.slice(-6).toUpperCase()} has been successfully created.`, type: 'success' })}
                 depositPercentage={pricingDetails.depositPercentage}
                 timeSlots={formSettings.timeSlots}
+                partyHallTimeSlots={formSettings.partyHallTimeSlots}
+                outdoorTimeSlots={formSettings.outdoorTimeSlots}
               />
             </div>
           )}
@@ -3419,17 +3426,17 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                     Booking Form Settings
                   </h3>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Time of Day Slots</label>
+                    <div className="mb-6">
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">In-House Party Hall Time Slots</label>
                       <div className="space-y-2 mb-3">
-                        {formSettings.timeSlots.map((slot, index) => (
+                        {formSettings.partyHallTimeSlots?.map((slot, index) => (
                           <div key={index} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700">
                             <span>{slot}</span>
                             <button
                               onClick={() => {
-                                const newSlots = [...formSettings.timeSlots];
+                                const newSlots = [...(formSettings.partyHallTimeSlots || [])];
                                 newSlots.splice(index, 1);
-                                setFormSettings({ ...formSettings, timeSlots: newSlots });
+                                setFormSettings({ ...formSettings, partyHallTimeSlots: newSlots });
                               }}
                               className="text-red-500 hover:text-red-700"
                             >
@@ -3437,23 +3444,67 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                             </button>
                           </div>
                         ))}
-                        {formSettings.timeSlots.length === 0 && (
+                        {(!formSettings.partyHallTimeSlots || formSettings.partyHallTimeSlots.length === 0) && (
                           <span className="text-xs text-gray-400 italic">No time slots added.</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          value={newTimeSlot}
-                          onChange={(e) => setNewTimeSlot(e.target.value)}
-                          placeholder="e.g. Breakfast (8am - 11am)"
+                          value={newPartyHallTimeSlot}
+                          onChange={(e) => setNewPartyHallTimeSlot(e.target.value)}
+                          placeholder="e.g. Lunch (12pm - 4pm)"
                           className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50"
                         />
                         <button
                           onClick={() => {
-                            if (newTimeSlot.trim()) {
-                              setFormSettings({ ...formSettings, timeSlots: [...formSettings.timeSlots, newTimeSlot.trim()] });
-                              setNewTimeSlot('');
+                            if (newPartyHallTimeSlot.trim()) {
+                              setFormSettings({ ...formSettings, partyHallTimeSlots: [...(formSettings.partyHallTimeSlots || []), newPartyHallTimeSlot.trim()] });
+                              setNewPartyHallTimeSlot('');
+                            }
+                          }}
+                          className="bg-gray-900 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Outdoor Catering Time Slots</label>
+                      <div className="space-y-2 mb-3">
+                        {formSettings.outdoorTimeSlots?.map((slot, index) => (
+                          <div key={index} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700">
+                            <span>{slot}</span>
+                            <button
+                              onClick={() => {
+                                const newSlots = [...(formSettings.outdoorTimeSlots || [])];
+                                newSlots.splice(index, 1);
+                                setFormSettings({ ...formSettings, outdoorTimeSlots: newSlots });
+                              }}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Icon name="XMarkIcon" size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        {(!formSettings.outdoorTimeSlots || formSettings.outdoorTimeSlots.length === 0) && (
+                          <span className="text-xs text-gray-400 italic">No time slots added.</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newOutdoorTimeSlot}
+                          onChange={(e) => setNewOutdoorTimeSlot(e.target.value)}
+                          placeholder="e.g. Dinner (6pm - 11pm)"
+                          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-gray-50"
+                        />
+                        <button
+                          onClick={() => {
+                            if (newOutdoorTimeSlot.trim()) {
+                              setFormSettings({ ...formSettings, outdoorTimeSlots: [...(formSettings.outdoorTimeSlots || []), newOutdoorTimeSlot.trim()] });
+                              setNewOutdoorTimeSlot('');
                             }
                           }}
                           className="bg-gray-900 hover:bg-gray-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
