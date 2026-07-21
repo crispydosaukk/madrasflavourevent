@@ -15,10 +15,12 @@ export async function POST(request: Request) {
       },
     });
 
+    const serviceName = data.serviceType || 'Booking';
+    
     const mailOptions = {
       from: `"Madras Flavours Events" <${process.env.EMAIL_USER || 'your-email@gmail.com'}>`,
-      to: 'rahulbadugu22@gmail.com, catering@madrasflavours.co.uk', // The requested recipient emails
-      subject: `New Booking Request from ${data.name || 'Website'}`,
+      to: 'rahulbadugu22@gmail.com, catering@madrasflavours.co.uk, Digitalbotsolutions@gmail.com', // The requested recipient emails
+      subject: `New ${serviceName} Request`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
           <h2 style="color: #F5A623; text-align: center; border-bottom: 2px solid #F5A623; padding-bottom: 10px;">New Booking Request</h2>
