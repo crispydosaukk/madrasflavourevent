@@ -711,6 +711,42 @@ export default function ManualBookingForm({ setCustomAlert, packages = [], extra
           </div>
         </div>
 
+        {/* Extra Charges Section (Dynamic) */}
+        <div className="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200">
+          <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide">Standard Adjustments (Fixed Fees) / Extras</label>
+          {(form.extraCharges || []).map((extra: any, idx: number) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <input type="text" placeholder="Description" value={extra.label || ''} onChange={e => {
+                const newExtras = [...(form.extraCharges || [])];
+                if (newExtras[idx]) {
+                  newExtras[idx].label = e.target.value;
+                  setForm({ ...form, extraCharges: newExtras });
+                }
+              }} className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-[#ED1C24]" />
+              <input type="number" placeholder="£ Amount" value={extra.amount || ''} onChange={e => {
+                const newExtras = [...(form.extraCharges || [])];
+                if (newExtras[idx]) {
+                  newExtras[idx].amount = parseFloat(e.target.value) || 0;
+                  setForm({ ...form, extraCharges: newExtras });
+                }
+              }} className="w-24 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-[#ED1C24]" />
+              <button type="button" onClick={() => {
+                const newExtras = (form.extraCharges || []).filter((_: any, i: number) => i !== idx);
+                setForm({ ...form, extraCharges: newExtras });
+              }} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                <Icon name="TrashIcon" size={18} />
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setForm({ ...form, extraCharges: [...(form.extraCharges || []), { label: '', amount: 0 }] })} className="text-sm font-semibold text-emerald-600 flex items-center gap-1 hover:text-emerald-700 mt-2 transition-colors">
+            <Icon name="PlusCircleIcon" size={18} /> Add New Charge
+          </button>
+          <div className="pt-3 border-t border-gray-200 flex justify-between font-bold text-gray-800 text-sm">
+            <span>Total Extras Amount:</span>
+            <span>£{(form.extraCharges || []).reduce((sum: number, c: any) => sum + (c.amount || 0), 0).toFixed(2)}</span>
+          </div>
+        </div>
+
         <div>
           <label className="block text-xs font-semibold text-gray-600 mb-1">Additional Notes</label>
           <textarea rows={3} value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#ED1C24]" placeholder="Any special requests or details..." />

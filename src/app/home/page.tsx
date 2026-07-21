@@ -260,6 +260,31 @@ export default function HomePage() {
         createdAt: new Date().toISOString()
       });
 
+      // Trigger email notification
+      try {
+        await fetch('/api/send-booking-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: bookingForm.name,
+            email: bookingForm.email,
+            phone: fullPhone,
+            eventType: bookingForm.eventType,
+            serviceType: bookingForm.serviceType,
+            date: bookingForm.date,
+            timeOfDay: bookingForm.timeOfDay,
+            guests: guestCount,
+            message: bookingForm.message,
+            package: bookingForm.selectedPackage || 'Not Selected',
+          }),
+        });
+      } catch (emailError) {
+        console.error("Failed to send notification email:", emailError);
+        // We do not stop the user flow if the email fails, as the booking is already recorded
+      }
+
       setSubmitted(true);
       setPhoneError('');
       setBookingForm({ name: '', email: '', phone: '', eventType: '', serviceType: '', date: '', timeOfDay: '', guests: '', message: '', selectedPackage: '', postCode: '', address: '' });

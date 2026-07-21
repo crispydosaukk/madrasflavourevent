@@ -742,27 +742,33 @@ export default function AdminPage() {
 
   const buildStep5DepositConfirmedWhatsAppText = (booking: Booking) => {
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const vatMultiplier = booking.vatRate === 20 ? 1.2 : 1;
+    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
     const grandTotal = getTotalAmount(booking);
-    const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    const mainBalance = grandTotal - booking.deposit - extraChargesWithVat;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
 
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(mainBalance + extraChargesTotal).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have received and verified your deposit of *£${booking.deposit.toLocaleString()}*! Your booking for the *${booking.eventType}* on *${booking.date}* is officially confirmed!\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Remaining Balance: *£${(grandTotal - booking.deposit).toLocaleString()}*\n${booking.dueDate ? `• Balance Due Date: ${booking.dueDate}` : ''}\n\nWe will contact you shortly before the due date to finalize the food selections and details. Thank you for choosing Madras Flavours Events! 🙏✨`);
   };
 
   const buildStep7FinalPaymentReceivedWhatsAppText = (booking: Booking) => {
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+    const vatMultiplier = booking.vatRate === 20 ? 1.2 : 1;
+    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
     const grandTotal = getTotalAmount(booking);
-    const mainBalance = grandTotal - booking.deposit - extraChargesTotal;
+    const mainBalance = grandTotal - booking.deposit - extraChargesWithVat;
     const vatText = booking.vatRate === 20 ? `\n• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
 
-    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! Your booking account is now settled.\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Main Balance Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
+    return buildWhatsAppLink(booking.phone, `Hi ${booking.name.split(' ')[0]},\n\nWe have successfully received and verified your final payment of *£${mainBalance.toLocaleString()}*! Your booking account is now settled.\n\n*Payments Summary:*${vatText}\n• Grand Total: £${grandTotal.toLocaleString()}\n• Deposit Paid: £${booking.deposit.toLocaleString()}\n• Final Payment (Food Package) Paid: £${mainBalance.toLocaleString()}\n• Remaining Balance: *Paid in Full ✅*\n\nWe look forward to serving you on *${booking.date}* at *${booking.time}*! If you have any last-minute adjustments, please let us know. Thank you! 🙏✨`);
   };
 
   const buildCompletedWhatsAppText = (booking: Booking) => {
     const total = getTotalAmount(booking).toLocaleString();
     const deposit = booking.deposit.toLocaleString();
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-    const finalPaymentPaidAmt = getTotalAmount(booking) - booking.deposit - extraChargesTotal;
+    const vatMultiplier = booking.vatRate === 20 ? 1.2 : 1;
+    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
+    const finalPaymentPaidAmt = getTotalAmount(booking) - booking.deposit - extraChargesWithVat;
 
     let discountText = '';
     if (booking.discount) {
@@ -798,12 +804,12 @@ ${guestBreakdown}
 
 *Final Invoice Details:*
 • Base Amount: £${booking.baseAmount.toLocaleString()}${discountText}
-• Grand Total: £${total}
+${booking.vatRate === 20 ? `• VAT (20%): +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}\n` : ''}• Grand Total: £${total}
 
 *Payments Received:*
 • Deposit: £${deposit}
-• Main Balance Paid: £${finalPaymentPaidAmt.toLocaleString()}
-${extraChargesTotal > 0 ? `• Extra Charges Paid: £${extraChargesTotal.toLocaleString()} (${booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid'})\n` : ''}• Status: *Paid in Full ✅*
+• Final Payment (Food Package, incl. VAT): £${finalPaymentPaidAmt.toLocaleString()}
+${extraChargesTotal > 0 ? `• Extra Charges Paid (incl. VAT): £${extraChargesWithVat.toLocaleString()} (${booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid'})\n` : ''}• Status: *Paid in Full ✅*
 
 It was an absolute pleasure serving you. We hope you and your guests had a wonderful time! We'd love to host your future events. 🙏✨`;
   };
@@ -833,7 +839,9 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
 
     const grandTotal = getTotalAmount(booking);
     const extraChargesTotal = (booking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
-    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
+    const vatMultiplier = booking.vatRate === 20 ? 1.2 : 1;
+    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
+    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesWithVat;
 
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isFinalPaid = booking.finalPaymentPaid;
@@ -841,18 +849,21 @@ It was an absolute pleasure serving you. We hope you and your guests had a wonde
 
     const totalPaid = (isDepositPaid ? booking.deposit : 0) +
       (isFinalPaid ? finalPaymentPaidAmt : 0) +
-      (isExtraPaid ? extraChargesTotal : 0);
+      (isExtraPaid ? extraChargesWithVat : 0);
 
     const remainingBalance = grandTotal - totalPaid;
 
+    const vatText = booking.vatRate === 20 ? `\n\n*VAT (20%):* +£${(getFoodPackageTotal(booking) * 0.2).toLocaleString()}` : '';
+    const grandTotalText = `\n*Grand Total:* £${grandTotal.toLocaleString()}`;
+
     const breakdownText = `*Payment Breakdown:*\n` +
       `• Deposit Paid: £${booking.deposit.toLocaleString()} (${isDepositPaid ? (booking.paymentMethodDeposit ? `Paid via ${booking.paymentMethodDeposit.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
-      `• Final Payment (Main Balance): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
-      (extraChargesTotal > 0 ? `• Extras / Adjustments: £${extraChargesTotal.toLocaleString()} (${isExtraPaid ? (booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` : '') +
+      `• Final Payment (Food Package, incl. VAT): £${finalPaymentPaidAmt.toLocaleString()} (${isFinalPaid ? (booking.paymentMethodFinal ? `Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` +
+      (extraChargesTotal > 0 ? `• Extras / Adjustments (incl. VAT): £${extraChargesWithVat.toLocaleString()} (${isExtraPaid ? (booking.paymentMethodExtra ? `Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}` : 'Paid') : 'Pending'})\n` : '') +
       `• Total Paid: £${totalPaid.toLocaleString()}\n` +
       `• *Remaining Balance Due: ${remainingBalance <= 0 ? 'PAID IN FULL ✓' : `£${remainingBalance.toLocaleString()}`}*`;
 
-    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*Booking Ref:* ${generateDisplayId(booking)}\n*Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\nAccount Name: ${bank.accountName}\nSort Code: ${bank.sortCode}\nAccount No: ${bank.accountNumber}\nReference: ${generateDisplayId(booking)}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
+    return `Hi ${booking.name.split(' ')[0]}, thank you for choosing Madras Flavours Events for your ${booking.eventType}! 🎉\n\nHere is your final invoice summary:\n\n*Booking Ref:* ${generateDisplayId(booking)}\n*Package:* ${booking.selectedMenu || booking.package}\n\n${guestBreakdown}\n\n*Base Amount:* £${booking.baseAmount.toLocaleString()}${extrasText}${discountText}${vatText}${grandTotalText}\n\n${breakdownText}${dueDateText}\n\nPlease transfer the balance to:\nAccount Name: ${bank.accountName}\nSort Code: ${bank.sortCode}\nAccount No: ${bank.accountNumber}\nReference: ${generateDisplayId(booking)}\n\nOnce paid, please send a screenshot of the transfer confirmation here. Thank you!`;
   };
 
   const buildExtraInvoiceWhatsAppText = (booking: Booking, bank: typeof bankDetails) => {
@@ -1855,7 +1866,9 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
     const pricePerPerson = editableNewPackages.find(p => p.name === (booking.selectedMenu || booking.package))?.pricePerPerson || 0;
     const grandTotal = getTotalAmount(booking);
     const discountAmount = getDiscountAmount(booking);
-    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesTotal;
+    const vatMultiplier = booking.vatRate === 20 ? 1.2 : 1;
+    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
+    const finalPaymentPaidAmt = grandTotal - booking.deposit - extraChargesWithVat;
     const isDepositPaid = booking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(booking.status);
     const isExtraPaid = booking.status === 'completed' || !!booking.paymentProofExtra || booking.finalPaymentPaid;
 
@@ -2219,7 +2232,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
             ${!isDepositInvoice ? `
             <tr>
               <td style="padding-left: 10px; color: #555;">
-                • Final Payment (Main Balance):
+                • Final Payment (Food Package, incl. VAT):
                 ${booking.finalPaymentPaid && booking.paymentMethodFinal ? `
                   <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
                     Paid via ${booking.paymentMethodFinal.replace('Paid by ', '')}
@@ -2231,10 +2244,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               </td>
             </tr>
             
-            ${(booking.extraCharges || []).map(extra => `
+            ${extraChargesWithVat > 0 ? `
             <tr>
               <td style="padding-left: 10px; color: #555; vertical-align: top;">
-                • ${extra.label}:
+                • Extras / Adjustments (incl. VAT):
                 ${isExtraPaid && booking.paymentMethodExtra ? `
                   <div style="font-size: 11px; color: #666; margin-left: 10px; margin-top: 2px; font-style: italic;">
                     Paid via ${booking.paymentMethodExtra.replace('Paid by ', '')}
@@ -2242,10 +2255,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 ` : ''}
               </td>
               <td class="text-right" style="color: ${isExtraPaid ? '#2b7a4a' : '#c86a00'}; font-weight: 500; vertical-align: top;">
-                ${isExtraPaid ? `-£${extra.amount.toLocaleString()} (Paid)` : `£${extra.amount.toLocaleString()} (Pending)`}
+                ${isExtraPaid ? `-£${extraChargesWithVat.toLocaleString()} (Paid)` : `£${extraChargesWithVat.toLocaleString()} (Pending)`}
               </td>
             </tr>
-            `).join('')}
+            ` : ''}
             ` : ''}
             
             <tr style="border-top: 1px solid #ddd;">
@@ -2254,7 +2267,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                 £${(
         isDepositInvoice
           ? (isDepositPaid ? booking.deposit : 0)
-          : ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))
+          : ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesWithVat : 0))
       ).toLocaleString()}
               </td>
             </tr>
@@ -2262,11 +2275,11 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
               <td style="font-weight: bold; padding-bottom: 10px;">${isDepositInvoice ? 'Deposit Amount Due Now:' : 'Remaining Balance Due:'}</td>
               <td class="text-right" style="font-weight: bold; color: ${isDepositInvoice
         ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? '#2b7a4a' : '#c86a00')
-        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? '#2b7a4a' : '#c86a00')
+        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesWithVat : 0))) <= 0 ? '#2b7a4a' : '#c86a00')
       }; padding-bottom: 10px;">
                 ${isDepositInvoice
         ? ((booking.deposit - (isDepositPaid ? booking.deposit : 0)) <= 0 ? 'DEPOSIT PAID ✓' : `£${(booking.deposit - (isDepositPaid ? booking.deposit : 0)).toLocaleString()}`)
-        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesTotal : 0))).toLocaleString()}`)
+        : ((grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesWithVat : 0))) <= 0 ? 'PAID IN FULL ✓' : `£${(grandTotal - ((isDepositPaid ? booking.deposit : 0) + (booking.finalPaymentPaid ? finalPaymentPaidAmt : 0) + (isExtraPaid ? extraChargesWithVat : 0))).toLocaleString()}`)
       }
               </td>
             </tr>
@@ -5397,6 +5410,16 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                         <span className="font-medium text-red-600">-£{getDiscountAmount(selectedBooking).toLocaleString()}</span>
                       </div>
                     )}
+                    {selectedBooking.vatRate === 20 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">VAT (20%)</span>
+                        <span className="font-medium text-amber-700">+£{(getFoodPackageTotal(selectedBooking) * 0.2).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
+                      <span className="text-gray-600">Grand Total</span>
+                      <span className="font-bold text-gray-900">£{getTotalAmount(selectedBooking).toLocaleString()}</span>
+                    </div>
                     <div className="border-t border-gray-200 pt-2 flex justify-between text-sm">
                       <span className="text-gray-600">Deposit Paid</span>
                       <span className="font-medium text-emerald-700">-£{selectedBooking.deposit.toLocaleString()}</span>
@@ -5599,18 +5622,20 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                   {(() => {
                     const grandTotal = getTotalAmount(selectedBooking);
                     const extraChargesTotal = (selectedBooking.extraCharges || []).reduce((s, c) => s + c.amount, 0);
+                    const vatMultiplier = selectedBooking.vatRate === 20 ? 1.2 : 1;
+                    const extraChargesWithVat = extraChargesTotal * vatMultiplier;
                     const nonPresetExtras = (selectedBooking.extraCharges || []).filter(c => !c.isPreset && !EXTRAS.some(preset => preset.name === c.label));
-                    const nonPresetTotal = nonPresetExtras.reduce((s, c) => s + c.amount, 0);
-                    const presetTotal = extraChargesTotal - nonPresetTotal;
+                    const nonPresetTotal = nonPresetExtras.reduce((s, c) => s + c.amount, 0) * vatMultiplier;
+                    const presetTotal = extraChargesWithVat - nonPresetTotal;
 
-                    const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesTotal;
+                    const finalPaymentPaidAmt = grandTotal - selectedBooking.deposit - extraChargesWithVat;
 
                     const isDepositPaid = selectedBooking.depositPaid || !['new_enquiry', 'menu_sent', 'menu_selected', 'deposit_pending'].includes(selectedBooking.status);
                     const isFinalPaid = selectedBooking.finalPaymentPaid;
                     const isNonPresetPaid = selectedBooking.status === 'completed' || !!selectedBooking.paymentProofExtra;
 
                     const paidExtrasAmount = (isFinalPaid ? presetTotal : 0) + (isNonPresetPaid ? nonPresetTotal : 0);
-                    const isExtraPaid = (extraChargesTotal === 0) || (paidExtrasAmount === extraChargesTotal) || selectedBooking.status === 'completed';
+                    const isExtraPaid = (extraChargesWithVat === 0) || (paidExtrasAmount === extraChargesWithVat) || selectedBooking.status === 'completed';
 
                     const totalPaid = (isDepositPaid ? selectedBooking.deposit : 0) +
                       (isFinalPaid ? finalPaymentPaidAmt : 0) +
@@ -5652,7 +5677,7 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
 
                           {/* Final Payment (Main Balance) */}
                           <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Final Payment (Main Balance)</span>
+                            <span className="text-gray-500">Final Payment (Food Package, incl. VAT)</span>
                             <div className="text-right">
                               <span className={`font-semibold ${isFinalPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
                                 £{finalPaymentPaidAmt.toLocaleString()} {isFinalPaid ? '✓ Paid' : '(pending)'}
@@ -5668,10 +5693,10 @@ Once paid, please send a screenshot of the transfer confirmation here so we can 
                           {/* Extras */}
                           {extraChargesTotal > 0 && (
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Extras / Adjustments</span>
+                              <span className="text-gray-500">Extras / Adjustments (incl. VAT)</span>
                               <div className="text-right">
                                 <span className={`font-semibold ${isExtraPaid ? 'text-emerald-700' : 'text-amber-600'}`}>
-                                  £{extraChargesTotal.toLocaleString()} {isExtraPaid ? '✓ Paid' : (paidExtrasAmount > 0 ? '(partially paid)' : '(pending)')}
+                                  £{extraChargesWithVat.toLocaleString()} {isExtraPaid ? '✓ Paid' : (paidExtrasAmount > 0 ? '(partially paid)' : '(pending)')}
                                 </span>
                                 {isExtraPaid && selectedBooking.paymentMethodFinal && (
                                   <span className="block text-[10px] text-gray-400 font-normal">
