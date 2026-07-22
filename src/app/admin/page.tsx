@@ -396,7 +396,7 @@ export default function AdminPage() {
   const [filterEvent, setFilterEvent] = useState<string>('all');
   const [loggedIn, setLoggedIn] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [loginForm, setLoginForm] = useState({ email: 'rahulbadugu22@gmail.com', password: '7981255989' });
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
