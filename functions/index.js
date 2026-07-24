@@ -8,10 +8,9 @@ exports.sendBookingEmail = onCall(async (request) => {
   try {
     const data = request.data;
     
-    // We can use Firebase config or fallback to the provided credentials
-    const config = require('firebase-functions').config();
-    const emailUser = (config.gmail && config.gmail.email) || process.env.EMAIL_USER || 'mfcentralkitchen@gmail.com';
-    const emailPass = (config.gmail && config.gmail.password) || process.env.EMAIL_PASS || 'rfznermtzbowtinn';
+    // Use environment variables or fallback to hardcoded credentials
+    const emailUser = process.env.EMAIL_USER || 'mfcentralkitchen@gmail.com';
+    const emailPass = process.env.EMAIL_PASS || 'rfznermtzbowtinn';
 
     const transporter = nodemailer.createTransport({
       service: 'gmail',
