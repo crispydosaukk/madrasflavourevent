@@ -1,25 +1,31 @@
-import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
 
-export async function POST(request: Request) {
+admin.initializeApp();
+
+exports.sendBookingEmail = onCall(async (request) => {
   try {
-    const data = await request.json();
+    const data = request.data;
+    
+    // We can use Firebase config or fallback to the provided credentials
+    const config = require('firebase-functions').config();
+    const emailUser = (config.gmail && config.gmail.email) || process.env.EMAIL_USER || 'mfcentralkitchen@gmail.com';
+    const emailPass = (config.gmail && config.gmail.password) || process.env.EMAIL_PASS || 'rfznermtzbowtinn';
 
-    // Create a transporter using your email service provider details
-    // It's recommended to store these in environment variables (e.g., process.env.EMAIL_USER)
     const transporter = nodemailer.createTransport({
-      service: 'gmail', // You can use other services like 'sendgrid', 'smtp', etc.
+      service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER || 'your-email@gmail.com', // Replace with your email or use ENV
-        pass: process.env.EMAIL_PASS || 'your-app-password',    // Replace with your app password or use ENV
+        user: emailUser,
+        pass: emailPass,
       },
     });
 
     const serviceName = data.serviceType || 'Booking';
     
     const mailOptions = {
-      from: `"Madras Flavours Events" <${process.env.EMAIL_USER || 'your-email@gmail.com'}>`,
-      to: 'rahulbadugu22@gmail.com, catering@madrasflavours.co.uk, Digitalbotsolutions@gmail.com', // The requested recipient emails
+      from: `"Madras Flavours Events" <${emailUser}>`,
+      to: 'rahulbadugu22@gmail.com, catering@madrasflavours.co.uk, Digitalbotsolutions@gmail.com',
       subject: `New ${serviceName} Request`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
@@ -82,12 +88,10 @@ export async function POST(request: Request) {
       `,
     };
 
-    // Send the email
     await transporter.sendMail(mailOptions);
-
-    return NextResponse.json({ success: true, message: 'Email sent successfully' }, { status: 200 });
-  } catch (error: any) {
+    return { success: true, message: 'Email sent successfully' };
+  } catch (error) {
     console.error('Error sending email:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    throw new HttpsError('internal', 'Failed to send email', error.message);
   }
-}
+});

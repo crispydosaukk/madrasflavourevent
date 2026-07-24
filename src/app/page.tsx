@@ -6,7 +6,8 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Icon from '@/components/ui/AppIcon';
 import { collection, addDoc, onSnapshot, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import {
   NEW_PACKAGES as DEFAULT_NEW_PACKAGES,
   MENU_CATEGORIES as DEFAULT_MENU_CATEGORIES,
@@ -260,25 +261,20 @@ export default function HomePage() {
         createdAt: new Date().toISOString()
       });
 
-      // Trigger email notification
+      // Trigger email notification via Firebase Cloud Functions
       try {
-        await fetch('/api/send-booking-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: bookingForm.name,
-            email: bookingForm.email,
-            phone: fullPhone,
-            eventType: bookingForm.eventType,
-            serviceType: bookingForm.serviceType,
-            date: bookingForm.date,
-            timeOfDay: bookingForm.timeOfDay,
-            guests: guestCount,
-            message: bookingForm.message,
-            package: bookingForm.selectedPackage || 'Not Selected',
-          }),
+        const sendBookingEmail = httpsCallable(functions, 'sendBookingEmail');
+        await sendBookingEmail({
+          name: bookingForm.name,
+          email: bookingForm.email,
+          phone: fullPhone,
+          eventType: bookingForm.eventType,
+          serviceType: bookingForm.serviceType,
+          date: bookingForm.date,
+          timeOfDay: bookingForm.timeOfDay,
+          guests: guestCount,
+          message: bookingForm.message,
+          package: bookingForm.selectedPackage || 'Not Selected',
         });
       } catch (emailError) {
         console.error("Failed to send notification email:", emailError);
